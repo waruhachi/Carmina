@@ -6,9 +6,15 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		9817384A2FF97E7900713ED6 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 981738492FF97E7900713ED6 /* .gitignore */; };
+		9817DF5E2FF8F6D400020077 /* CarminaKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9817DF5D2FF8F6D400020077 /* CarminaKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
+		981738492FF97E7900713ED6 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		9817DF4A2FF8660B00020077 /* Carmina.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Carmina.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		9817DF5A2FF8670D00020077 /* CarminaKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = CarminaKit; sourceTree = "<group>"; };
+		9817DF5B2FF869EF00020077 /* CarminaKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = CarminaKit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -23,6 +29,7 @@
 		9817DF472FF8660B00020077 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				9817DF5E2FF8F6D400020077 /* CarminaKit in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -31,8 +38,10 @@
 		9817DF412FF8660B00020077 = {
 			isa = PBXGroup;
 			children = (
-				9817DF5A2FF8670D00020077 /* CarminaKit */,
+				981738492FF97E7900713ED6 /* .gitignore */,
+				9817DF5B2FF869EF00020077 /* CarminaKit */,
 				9817DF4C2FF8660B00020077 /* Carmina */,
+				9817DF5C2FF8F6D400020077 /* Frameworks */,
 				9817DF4B2FF8660B00020077 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +52,13 @@
 				9817DF4A2FF8660B00020077 /* Carmina.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		9817DF5C2FF8F6D400020077 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -62,6 +78,9 @@
 				9817DF4C2FF8660B00020077 /* Carmina */,
 			);
 			name = Carmina;
+			packageProductDependencies = (
+				9817DF5D2FF8F6D400020077 /* CarminaKit */,
+			);
 			productName = Carmina;
 			productReference = 9817DF4A2FF8660B00020077 /* Carmina.app */;
 			productType = "com.apple.product-type.application";
@@ -104,6 +123,7 @@
 		9817DF482FF8660B00020077 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
+				9817384A2FF97E7900713ED6 /* .gitignore in Resources */,
 			);
 		};
 /* End PBXResourcesBuildPhase section */
@@ -343,6 +363,13 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9817DF5D2FF8F6D400020077 /* CarminaKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CarminaKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 9817DF422FF8660B00020077 /* Project object */;
 	validationLevel = 1;
