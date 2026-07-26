@@ -14,6 +14,8 @@ import SwiftUI
 struct NowPlayingScreen: View {
     @ObserveInjection var inject
 
+    @AppStorage("fullscreenArtwork") private var fullscreenArtwork = false
+
     @Environment(PlayerCoordinator.self) private var player
     @Environment(DeviceLibrary.self) private var library
 
@@ -40,17 +42,25 @@ struct NowPlayingScreen: View {
 
     private var dominant: Color { palette.first ?? .black }
 
+    private var artworkBackground: Color {
+        #if canImport(UIKit)
+            Color(uiColor: .secondarySystemBackground)
+        #else
+            Color.gray.opacity(0.2)
+        #endif
+    }
+
+    private var hasLyrics: Bool {
+        !(player.current?.lyrics?.isEmpty ?? true)
+    }
+
     var body: some View {
-        ZStack(alignment: .top) {
-            background
-            coverLayer
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                controls
-                    .padding(.horizontal, 28)
-                    .padding(.bottom, -5)
+        Group {
+            if fullscreenArtwork {
+                fullscreenBody
+            } else {
+                squareBody
             }
-            grip
         }
         .foregroundStyle(.white)
         #if os(iOS)
@@ -83,9 +93,9 @@ struct NowPlayingScreen: View {
             )
             if let ui = library.artworkUIImage(
                 for: song.persistentID,
-                size: CGSize(width: 300, height: 300)
+                size: CGSize(width: 600, height: 600)
             ),
-                let colors = ui.dominantColorFrequencies()?
+                let colors = ui.dominantColorFrequencies(with: .high)?
                     .map({ Color($0.color) }),
                 !colors.isEmpty
             {
@@ -93,18 +103,47 @@ struct NowPlayingScreen: View {
             }
         #endif
     }
-
-    private var hasLyrics: Bool {
-        !(player.current?.lyrics?.isEmpty ?? true)
-    }
 }
 
+// MARK: - Layouts
+
 extension NowPlayingScreen {
+    fileprivate var fullscreenBody: some View {
+        ZStack(alignment: .top) {
+            background
+            coverLayer
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                controlStack
+                    .padding(.horizontal, 28)
+                    .padding(.bottom, 0)
+            }
+            grip
+        }
+    }
+
+    fileprivate var squareBody: some View {
+        VStack(spacing: 0) {
+            grip
+            squareArtwork
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            controlStack
+                .padding(.horizontal, 28)
+                .padding(.bottom, 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(meshBackground)
+    }
+
     fileprivate var grip: some View {
         Capsule().fill(.white.opacity(0.5)).frame(width: 60, height: 4)
             .padding(.top, 8)
     }
+}
 
+// MARK: - Full-screen artwork
+
+extension NowPlayingScreen {
     fileprivate var background: some View {
         GeometryReader { geo in
             ZStack {
@@ -162,130 +201,190 @@ extension NowPlayingScreen {
         }
         .ignoresSafeArea()
     }
+}
 
-    fileprivate var controls: some View {
+// MARK: - Square artwork (original)
+
+extension NowPlayingScreen {
+    fileprivate var squareArtwork: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            let small = !player.isPlaying
+            Group {
+                if let artImage {
+                    artImage.resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    Color.clear
+                }
+            }
+            .background(artworkBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(small ? 48 : 0)
+            .shadow(
+                color: Color(
+                    .sRGBLinear,
+                    white: 0,
+                    opacity: small ? 0.13 : 0.33
+                ),
+                radius: small ? 3 : 8,
+                y: small ? 3 : 10
+            )
+            .frame(width: side, height: side)
+            .frame(width: geo.size.width, height: geo.size.height)
+            .animation(.smooth, value: player.isPlaying)
+        }
+        .padding(.horizontal, 25)
+    }
+
+    fileprivate var meshBackground: some View {
+        #if canImport(UIKit)
+            ColorfulBackground(colors: palette)
+                .overlay(.black.opacity(0.25))
+                .ignoresSafeArea()
+        #else
+            NowPlayingBackground(colors: palette)
+        #endif
+    }
+}
+
+// MARK: - Control stacks
+
+extension NowPlayingScreen {
+    fileprivate var controlStack: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    MarqueeText(player.current?.title ?? "")
-                        .font(.title3.weight(.semibold))
-                        .id(player.current?.title ?? "")
-                    MarqueeText(player.current?.artist ?? "")
-                        .foregroundStyle(.white.opacity(0.7))
-                        .id(player.current?.artist ?? "")
-                }
-                Spacer(minLength: 8)
-                if let song = player.current {
-                    Menu {
-                        SongMenu(song: song)
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 30, height: 30)
-                            .contentShape(.rect)
-                    }
-                    .tint(.primary)
-                }
-            }
+            titleRow
+            scrubber.padding(.top, 15)
+            transport.padding(.top, 20)
+            volumeSlider.padding(.top, 35)
+            footer.padding(.top, 15)
+        }
+    }
+}
 
-            ElasticSlider(
-                value: progress,
-                in: 0...max(player.duration, 1),
-                leadingLabel: {
-                    Text(player.currentTime.asTimeString(style: .positional))
-                        .font(.caption.weight(.semibold)).padding(.top, 8)
+// MARK: - Shared control rows
+
+extension NowPlayingScreen {
+    fileprivate var titleRow: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                MarqueeText(player.current?.title ?? "")
+                    .font(.title3.weight(.semibold))
+                    .id(player.current?.title ?? "")
+                MarqueeText(player.current?.artist ?? "")
+                    .foregroundStyle(.white.opacity(0.7))
+                    .id(player.current?.artist ?? "")
+            }
+            Spacer(minLength: 8)
+            if let song = player.current {
+                Menu {
+                    SongMenu(song: song)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .contentShape(.rect)
+                }
+                .tint(.primary)
+            }
+        }
+    }
+
+    fileprivate var scrubber: some View {
+        ElasticSlider(
+            value: progress,
+            in: 0...max(player.duration, 1),
+            leadingLabel: {
+                Text(player.currentTime.asTimeString(style: .positional))
+                    .font(.caption).padding(.top, 8)
+            },
+            trailingLabel: {
+                Text(
+                    ((player.duration - player.currentTime) * -1)
+                        .asTimeString(style: .positional)
+                ).font(.caption).padding(.top, 8)
+            }
+        )
+        .sliderStyle(.playbackProgress)
+        .frame(height: 60)
+        .overlay(alignment: .bottom) {
+            if let quality = player.audioQuality {
+                Text(quality)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+        }
+    }
+
+    fileprivate var transport: some View {
+        HStack(spacing: 24) {
+            PlayerButton(
+                label: {
+                    PlayerButtonLabel(
+                        type: .backward,
+                        size: 34,
+                        animationTrigger: backwardTrigger
+                    )
                 },
-                trailingLabel: {
-                    Text(
-                        ((player.duration - player.currentTime) * -1)
-                            .asTimeString(style: .positional)
-                    ).font(.caption.weight(.semibold)).padding(.top, 8)
+                onEnded: {
+                    backwardTrigger.toggle(bouncing: true)
+                    player.previous()
                 }
             )
-            .sliderStyle(.playbackProgress)
-            .frame(height: 60)
-            .overlay(alignment: .bottom) {
-                if let quality = player.audioQuality {
-                    Text(quality)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-            }
-            .padding(.top, 15)
-
-            HStack(spacing: 24) {
-                PlayerButton(
-                    label: {
-                        PlayerButtonLabel(
-                            type: .backward,
-                            size: 34,
-                            animationTrigger: backwardTrigger
-                        )
-                    },
-                    onEnded: {
-                        backwardTrigger.toggle(bouncing: true)
-                        player.previous()
-                    }
-                )
-                PlayerButton(
-                    label: {
-                        PlayerButtonLabel(
-                            type: player.isPlaying ? .pause : .play,
-                            size: 34
-                        )
-                    },
-                    onEnded: { player.togglePlayPause() }
-                )
-                PlayerButton(
-                    label: {
-                        PlayerButtonLabel(
-                            type: .forward,
-                            size: 34,
-                            animationTrigger: forwardTrigger
-                        )
-                    },
-                    onEnded: {
-                        forwardTrigger.toggle(bouncing: true)
-                        player.next()
-                    }
-                )
-            }
-            .playerButtonStyle(
-                .init(
-                    size: 68,
-                    labelColor: .white,
-                    tint: .white.opacity(0.2),
-                    pressedColor: .white
-                )
-            )
-            .padding(.top, 20)
-
-            ElasticSlider(
-                value: volume,
-                in: 0...1,
-                leadingLabel: {
-                    Image(systemName: "speaker.fill")
-                        .padding(.trailing, 10)
-                        .symbolEffect(.bounce, value: minVolumeTrigger)
+            PlayerButton(
+                label: {
+                    PlayerButtonLabel(
+                        type: player.isPlaying ? .pause : .play,
+                        size: 34
+                    )
                 },
-                trailingLabel: {
-                    Image(systemName: "speaker.wave.3.fill")
-                        .padding(.leading, 10)
-                        .symbolEffect(.bounce, value: maxVolumeTrigger)
+                onEnded: { player.togglePlayPause() }
+            )
+            PlayerButton(
+                label: {
+                    PlayerButtonLabel(
+                        type: .forward,
+                        size: 34,
+                        animationTrigger: forwardTrigger
+                    )
+                },
+                onEnded: {
+                    forwardTrigger.toggle(bouncing: true)
+                    player.next()
                 }
             )
-            .sliderStyle(.volume)
-            .font(.system(size: 14))
-            .frame(height: 50)
-            .padding(.horizontal, -10)
-            .onChange(of: systemAudio.volume) {
-                if systemAudio.volume == 0 { minVolumeTrigger.toggle() }
-                if systemAudio.volume == 1 { maxVolumeTrigger.toggle() }
-            }
-            .padding(.top, 35)
+        }
+        .playerButtonStyle(
+            .init(
+                size: 68,
+                labelColor: .white,
+                tint: .white.opacity(0.2),
+                pressedColor: .white
+            )
+        )
+    }
 
-            footer
+    fileprivate var volumeSlider: some View {
+        ElasticSlider(
+            value: volume,
+            in: 0...1,
+            leadingLabel: {
+                Image(systemName: "speaker.fill")
+                    .padding(.trailing, 10)
+                    .symbolEffect(.bounce, value: minVolumeTrigger)
+            },
+            trailingLabel: {
+                Image(systemName: "speaker.wave.3.fill")
+                    .padding(.leading, 10)
+                    .symbolEffect(.bounce, value: maxVolumeTrigger)
+            }
+        )
+        .sliderStyle(.volume)
+        .font(.system(size: 14))
+        .frame(height: 50)
+        .onChange(of: systemAudio.volume) {
+            if systemAudio.volume == 0 { minVolumeTrigger.toggle() }
+            if systemAudio.volume == 1 { maxVolumeTrigger.toggle() }
         }
     }
 

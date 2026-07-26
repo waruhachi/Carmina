@@ -12,16 +12,22 @@ struct SettingsView: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    @AppStorage("fullscreenArtwork") private var fullscreenArtwork = false
+
     var body: some View {
         NavigationStack {
-            Color.clear
-                .navigationTitle("Settings")
-                .toolbarTitleDisplayMode(.inlineLarge)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button(role: .close) { dismiss() }
-                    }
+            Form {
+                Section("Now Playing") {
+                    Toggle("Full-Screen Artwork", isOn: $fullscreenArtwork)
                 }
+            }
+            .navigationTitle("Settings")
+            .toolbarTitleDisplayMode(.inlineLarge)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .close) { dismiss() }
+                }
+            }
         }
     }
 }
