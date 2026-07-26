@@ -1,0 +1,27 @@
+//
+//  SettingsButton.swift
+//  Carmina
+//
+//  Created by waru on 7/21/26.
+//
+
+import SwiftUI
+
+struct SettingsButton: View {
+    @ObserveInjection var inject
+
+    @State private var showingSettings = false
+
+    var body: some View {
+        Button {
+            showingSettings = true
+        } label: {
+            Image(systemName: "gearshape")
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Settings")
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
+        }
+    }
+}
