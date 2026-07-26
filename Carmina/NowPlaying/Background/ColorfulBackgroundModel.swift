@@ -12,6 +12,8 @@ import SwiftUI
 @Observable
 class ColorfulBackgroundModel: @unchecked Sendable {
     static let animationDuration: Double = 20
+    static let shared = ColorfulBackgroundModel()
+
     var points: ColorPoints = .zero.shuffled
 
     private var colors: [Color] = []
@@ -20,10 +22,20 @@ class ColorfulBackgroundModel: @unchecked Sendable {
     private var animatioTimerCancellable: AnyCancellable?
 
     func onAppear() {
-        shown = true
-        animate()
-        animatedData = points
+        if !shown {
+            shown = true
+            animate()  // shuffle only the first time
+            animatedData = points
+        }
+        startTimer()
+    }
 
+    func onDisappear() {
+        animatioTimerCancellable?.cancel()
+        animatioTimerCancellable = nil
+    }
+
+    private func startTimer() {
         animatioTimerCancellable =
             Timer
             .publish(

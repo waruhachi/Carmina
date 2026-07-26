@@ -79,9 +79,20 @@ final class DeviceLibrary {
     }
 
     #if canImport(MediaPlayer)
-        func artworkUIImage(for id: UInt64?, size: CGSize) -> UIImage? {
+        func artworkUIImage(for id: UInt64?) -> UIImage? {
             guard let id, let art = artworkByID[id] else { return nil }
-            return art.image(at: size)
+            let natural = art.bounds.size
+            guard natural.width > 0, natural.height > 0 else { return nil }
+            let maxDimension: CGFloat = 1000
+            let ratio = min(
+                1,
+                maxDimension / max(natural.width, natural.height)
+            )
+            let target = CGSize(
+                width: natural.width * ratio,
+                height: natural.height * ratio
+            )
+            return art.image(at: target)
         }
     #endif
 

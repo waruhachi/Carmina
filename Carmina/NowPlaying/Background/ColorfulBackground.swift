@@ -10,7 +10,7 @@ import SwiftUI
 struct ColorfulBackground: View {
     @ObserveInjection var inject
 
-    @State var model = ColorfulBackgroundModel()
+    @State private var model = ColorfulBackgroundModel.shared
 
     let colors: [Color]
 
@@ -27,6 +27,9 @@ struct ColorfulBackground: View {
         }
         .onChange(of: colors) {
             model.set(colors)
+        }
+        .onDisappear {
+            model.onDisappear()
         }
     }
 }

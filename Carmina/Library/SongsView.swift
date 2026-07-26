@@ -56,7 +56,12 @@ struct SongsView: View {
                         EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 8)
                     )
                     .contentShape(.rect)
-                    .onTapGesture { player.play(displayed, startAt: index) }
+                    .onTapGesture {
+                        #if canImport(UIKit)
+                            UIApplication.shared.endEditing()
+                        #endif
+                        player.play(displayed, startAt: index)
+                    }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
                         Button {
                             player.playNext(song)
@@ -66,7 +71,7 @@ struct SongsView: View {
                                     "text.line.first.and.arrowtriangle.forward"
                             )
                         }
-                        .tint(.purple)
+                        .tint(.indigo)
                         if player.hasQueue {
                             Button {
                                 player.playLast(song)
@@ -76,7 +81,7 @@ struct SongsView: View {
                                         "text.line.last.and.arrowtriangle.forward"
                                 )
                             }
-                            .tint(.yellow)
+                            .tint(.orange)
                         }
                     }
                     .swipeActions(edge: .trailing) {
@@ -92,6 +97,7 @@ struct SongsView: View {
             }
         }
         .listStyle(.plain)
+        .scrollDismissesKeyboard(.immediately)
         .navigationTitle("Songs")
         .navigationBarTitleDisplayMode(.large)
         .searchable(
@@ -153,3 +159,18 @@ struct SongsView: View {
         .buttonStyle(.plain)
     }
 }
+
+#if canImport(UIKit)
+    import UIKit
+
+    extension UIApplication {
+        func endEditing() {
+            sendAction(
+                #selector(UIResponder.resignFirstResponder),
+                to: nil,
+                from: nil,
+                for: nil
+            )
+        }
+    }
+#endif

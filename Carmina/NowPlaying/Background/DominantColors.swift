@@ -127,7 +127,7 @@ extension UIImage {
         )
         let dominantColors = mergeSimilar(
             colors: similarColors,
-            diffThreshold: 18,
+            diffThreshold: 5,
             maxCount: 6
         )
         let totalDominantColors = dominantColors.reduce(into: 0) {

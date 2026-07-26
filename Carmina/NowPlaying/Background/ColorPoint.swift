@@ -158,39 +158,17 @@ extension ColorPoints {
     }
 
     func colored(colors: [Color]) -> ColorPoints {
-        ColorPoints(
-            point0: ColorPoint(
-                position: point0.position,
-                color: colors[safe: 0] ?? .black.opacity(0)
-            ),
-            point1: ColorPoint(
-                position: point1.position,
-                color: colors[safe: 1] ?? .black.opacity(0)
-            ),
-            point2: ColorPoint(
-                position: point2.position,
-                color: colors[safe: 2] ?? .black.opacity(0)
-            ),
-            point3: ColorPoint(
-                position: point3.position,
-                color: colors[safe: 3] ?? .black.opacity(0)
-            ),
-            point4: ColorPoint(
-                position: point4.position,
-                color: colors[safe: 4] ?? .black.opacity(0)
-            ),
-            point5: ColorPoint(
-                position: point5.position,
-                color: colors[safe: 5] ?? .black.opacity(0)
-            ),
-            point6: ColorPoint(
-                position: point6.position,
-                color: colors[safe: 6] ?? .black.opacity(0)
-            ),
-            point7: ColorPoint(
-                position: point7.position,
-                color: colors[safe: 7] ?? .black.opacity(0)
-            )
+        let base = colors.isEmpty ? [Color.gray] : colors
+        func color(at index: Int) -> Color { base[index % base.count] }
+        return ColorPoints(
+            point0: ColorPoint(position: point0.position, color: color(at: 0)),
+            point1: ColorPoint(position: point1.position, color: color(at: 1)),
+            point2: ColorPoint(position: point2.position, color: color(at: 2)),
+            point3: ColorPoint(position: point3.position, color: color(at: 3)),
+            point4: ColorPoint(position: point4.position, color: color(at: 4)),
+            point5: ColorPoint(position: point5.position, color: color(at: 5)),
+            point6: ColorPoint(position: point6.position, color: color(at: 6)),
+            point7: ColorPoint(position: point7.position, color: color(at: 7))
         )
     }
 }

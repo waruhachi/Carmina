@@ -21,6 +21,7 @@ struct NowPlayingScreen: View {
 
     @State private var systemAudio = SystemAudio()
     @State private var artImage: Image?
+    @State private var artworkAspect: CGFloat = 1
     @State private var palette: [Color] = []
     @State private var minVolumeTrigger = false
     @State private var maxVolumeTrigger = false
@@ -84,17 +85,16 @@ struct NowPlayingScreen: View {
         guard let song = player.current else {
             artImage = nil
             palette = []
+            artworkAspect = 1
             return
         }
         #if canImport(MediaPlayer)
-            artImage = library.artworkImage(
-                for: song.persistentID,
-                size: CGSize(width: 1000, height: 1000)
-            )
-            if let ui = library.artworkUIImage(
-                for: song.persistentID,
-                size: CGSize(width: 600, height: 600)
-            ),
+            let ui = library.artworkUIImage(for: song.persistentID)
+            artImage = ui.map { Image(uiImage: $0) }
+            if let ui {
+                artworkAspect = ui.size.width / max(ui.size.height, 1)
+            }
+            if let ui,
                 let colors = ui.dominantColorFrequencies(with: .high)?
                     .map({ Color($0.color) }),
                 !colors.isEmpty
@@ -210,6 +210,9 @@ extension NowPlayingScreen {
         GeometryReader { geo in
             let side = min(geo.size.width, geo.size.height)
             let small = !player.isPlaying
+            let nonSquare = abs(artworkAspect - 1) > 0.1
+            let pad: CGFloat =
+                nonSquare ? (small ? 90 : 48) : (small ? 48 : 0)
             Group {
                 if let artImage {
                     artImage.resizable().aspectRatio(contentMode: .fill)
@@ -219,7 +222,7 @@ extension NowPlayingScreen {
             }
             .background(artworkBackground)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .padding(small ? 48 : 0)
+            .padding(pad)
             .shadow(
                 color: Color(
                     .sRGBLinear,
