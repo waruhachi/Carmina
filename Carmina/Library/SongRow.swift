@@ -33,6 +33,7 @@ struct SongRow: View {
                     .frame(width: 44, height: 44)
                     .contentShape(.rect)
             }
+            .accessibilityLabel("More")
         }
         .tint(.primary)
         .contentShape(.rect)
@@ -63,6 +64,6 @@ struct SongRow: View {
         }
         .padding(.vertical, 16)
         .padding(.horizontal, 16)
-        .frame(width: 340)
+        .frame(maxWidth: 340)
     }
 }

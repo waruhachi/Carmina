@@ -17,8 +17,9 @@ struct SettingsButton: View {
             showingSettings = true
         } label: {
             Image(systemName: "gearshape")
+                .font(.title3)
         }
-        .buttonStyle(.plain)
+        .tint(.primary)
         .accessibilityLabel("Settings")
         .sheet(isPresented: $showingSettings) {
             SettingsView()

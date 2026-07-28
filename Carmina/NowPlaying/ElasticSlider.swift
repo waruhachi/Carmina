@@ -13,6 +13,7 @@ struct ElasticSlider<LeadingContent: View, TrailingContent: View>: View {
     @Binding private var value: Double
 
     @Environment(\.elasticSliderConfig) var config
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @GestureState private var isActive: Bool = false
 
@@ -45,18 +46,20 @@ struct ElasticSlider<LeadingContent: View, TrailingContent: View>: View {
                 sideLabeledTrack
             }
         }
-        .animation(.smooth(duration: 0.3, extraBounce: 0.3), value: isActive)
-        .sensoryFeedback(.increase, trigger: isValueExtreme) {
-            config.defaultSensoryFeedback && $1
+        .animation(
+            reduceMotion ? nil : .smooth(duration: 0.3, extraBounce: 0.3),
+            value: isActive
+        )
+        .sensoryFeedback(trigger: value) { _, newValue in
+            guard config.defaultSensoryFeedback else { return nil }
+            if newValue >= range.upperBound { return .increase }
+            if newValue <= range.lowerBound { return .decrease }
+            return nil
         }
     }
 }
 
 extension ElasticSlider {
-    fileprivate var isValueExtreme: Bool {
-        value == range.lowerBound || value == range.upperBound
-    }
-
     @ViewBuilder
     fileprivate func styled<Content: View>(_ content: Content) -> some View {
         if config.syncLabelsStyle {
@@ -319,7 +322,6 @@ extension ElasticSliderConfig {
             minimumTrackActiveColor: .white,
             minimumTrackInactiveColor: .white.opacity(0.3),
             maximumTrackColor: .white.opacity(0.3),
-            blendMode: .overlay,
             syncLabelsStyle: true
         )
     }
@@ -330,7 +332,6 @@ extension ElasticSliderConfig {
             minimumTrackActiveColor: .white,
             minimumTrackInactiveColor: .white.opacity(0.3),
             maximumTrackColor: .white.opacity(0.3),
-            blendMode: .overlay,
             syncLabelsStyle: true
         )
     }

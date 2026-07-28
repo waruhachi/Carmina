@@ -10,6 +10,8 @@ import SwiftUI
 struct ColorfulBackground: View {
     @ObserveInjection var inject
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var model = ColorfulBackgroundModel.shared
 
     let colors: [Color]
@@ -23,7 +25,7 @@ struct ColorfulBackground: View {
         )
         .onAppear {
             model.set(colors)
-            model.onAppear()
+            model.onAppear(reduceMotion: reduceMotion)
         }
         .onChange(of: colors) {
             model.set(colors)

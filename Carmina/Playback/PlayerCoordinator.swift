@@ -63,10 +63,61 @@ final class PlayerCoordinator {
                 MainActor.assumeIsolated { self?.saveState() }
             }
         #endif
+
+        #if os(iOS)
+            _ = NotificationCenter.default.addObserver(
+                forName: AVAudioSession.interruptionNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard
+                    let info = notification.userInfo,
+                    let raw = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+                    let type = AVAudioSession.InterruptionType(rawValue: raw)
+                else { return }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    switch type {
+                    case .began:
+                        guard self.isPlaying else { return }
+                        self.player.pause()
+                        self.isPlaying = false
+                        self.updateNowPlayingInfo()
+                    case .ended:
+                        guard
+                            UserDefaults.standard.bool(
+                                forKey: "resumeAfterInterruption"
+                            ),
+                            !self.isPlaying,
+                            self.current != nil,
+                            let optsRaw = info[
+                                AVAudioSessionInterruptionOptionKey
+                            ] as? UInt,
+                            AVAudioSession.InterruptionOptions(
+                                rawValue: optsRaw
+                            )
+                            .contains(.shouldResume)
+                        else { return }
+                        self.activateSession()
+                        self.player.play()
+                        self.isPlaying = true
+                        self.updateNowPlayingInfo()
+                    @unknown default:
+                        break
+                    }
+                }
+            }
+        #endif
     }
 
     func play(_ songs: [Song], startAt index: Int = 0) {
         queue = songs
+        currentIndex = index
+        startCurrent()
+    }
+
+    func play(at index: Int) {
+        guard queue.indices.contains(index) else { return }
         currentIndex = index
         startCurrent()
     }
@@ -92,7 +143,7 @@ final class PlayerCoordinator {
     func next() {
         guard currentIndex + 1 < queue.count else { return }
         currentIndex += 1
-        startCurrent()
+        startCurrent(autoPlay: isPlaying)
     }
 
     func previous() {
@@ -101,7 +152,7 @@ final class PlayerCoordinator {
             return
         }
         currentIndex -= 1
-        startCurrent()
+        startCurrent(autoPlay: isPlaying)
     }
 
     func seek(to seconds: Double) {
@@ -129,17 +180,14 @@ final class PlayerCoordinator {
         }
     }
 
-    private func startCurrent() {
+    private func startCurrent(autoPlay: Bool = true) {
         guard let url = current?.audioURL else { return }
-
-        activateSession()
 
         if let endObserver {
             NotificationCenter.default.removeObserver(endObserver)
         }
 
         let item = AVPlayerItem(url: url)
-
         player.replaceCurrentItem(with: item)
         endObserver = NotificationCenter.default.addObserver(
             forName: AVPlayerItem.didPlayToEndTimeNotification,
@@ -148,22 +196,49 @@ final class PlayerCoordinator {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.next() }
         }
-        player.play()
-        isPlaying = true
+
+        if autoPlay {
+            activateSession()
+            player.play()
+        }
+        isPlaying = autoPlay
         currentTime = 0
+        duration = 0
         audioQuality = nil
         updateNowPlayingInfo()
         saveState()
+
+        Task {
+            if let cm = try? await item.asset.load(.duration),
+                cm.seconds.isFinite
+            {
+                duration = cm.seconds
+                updateNowPlayingInfo()
+            }
+        }
         Task { await loadAudioQuality(url: url) }
     }
 
-    private func activateSession() {
+    private func activateSession(sampleRate: Double? = nil) {
         #if os(iOS)
+            let mixWithOthers = UserDefaults.standard.bool(
+                forKey: "mixWithOthers"
+            )
             Task.detached {
-                try? AVAudioSession.sharedInstance().setCategory(.playback)
-                try? AVAudioSession.sharedInstance().setActive(true)
+                let session = AVAudioSession.sharedInstance()
+                let options: AVAudioSession.CategoryOptions =
+                    mixWithOthers ? [.mixWithOthers] : []
+                try? session.setCategory(.playback, options: options)
+                if let sampleRate, sampleRate > 48_000 {
+                    try? session.setPreferredSampleRate(sampleRate)
+                }
+                try? session.setActive(true)
             }
         #endif
+    }
+
+    func mixSettingChanged() {
+        if isPlaying { activateSession() }
     }
 
     // MARK: - Persistence
@@ -363,6 +438,10 @@ final class PlayerCoordinator {
             audioQuality = channels > 2 ? "Dolby Atmos" : "Dolby Digital"
         default:
             audioQuality = nil
+        }
+
+        if sampleRate > 48_000 {
+            activateSession(sampleRate: sampleRate)
         }
     }
 }

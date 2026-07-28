@@ -10,7 +10,14 @@ import SwiftUI
 struct SidebarRootView: View {
     @ObserveInjection var inject
 
+    @Environment(PlayerCoordinator.self) private var player
+
+    @Namespace private var animation
+
     @State private var selection: AppSection? = .library
+    @State private var expandNowPlaying = false
+
+    private static let miniPlayerID = "nowPlaying"
 
     var body: some View {
         NavigationSplitView {
@@ -31,8 +38,22 @@ struct SidebarRootView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                MiniPlayerBar()
+                if player.current != nil {
+                    MiniPlayerBar()
+                        .contentShape(.rect)
+                        .matchedTransitionSource(
+                            id: Self.miniPlayerID,
+                            in: animation
+                        )
+                        .onTapGesture { expandNowPlaying = true }
+                }
             }
+        }
+        .fullScreenCover(isPresented: $expandNowPlaying) {
+            NowPlayingScreen()
+                .navigationTransition(
+                    .zoom(sourceID: Self.miniPlayerID, in: animation)
+                )
         }
     }
 }

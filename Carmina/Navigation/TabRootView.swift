@@ -38,11 +38,10 @@ struct TabRootView: View {
         }
         .tabBarMinimizeBehavior(player.current != nil ? .onScrollDown : .never)
         .tabViewBottomAccessory(isEnabled: player.current != nil) {
-            MiniPlayerBar()
+            MiniPlayerBar(onExpand: { expandNowPlaying = true })
                 .contentShape(.rect)
                 .matchedTransitionSource(id: Self.miniPlayerID, in: animation)
-                .onTapGesture { expandNowPlaying = true }
-                .gesture(
+                .simultaneousGesture(
                     DragGesture(minimumDistance: 10)
                         .onEnded {
                             if $0.translation.height < -30 {
@@ -52,10 +51,10 @@ struct TabRootView: View {
                 )
         }
         .fullScreenCover(isPresented: $expandNowPlaying) {
-                    NowPlayingScreen()
-                        .navigationTransition(
-                            .zoom(sourceID: Self.miniPlayerID, in: animation)
-                        )
-                }
+            NowPlayingScreen()
+                .navigationTransition(
+                    .zoom(sourceID: Self.miniPlayerID, in: animation)
+                )
+        }
     }
 }

@@ -44,6 +44,7 @@ struct LibraryView: View {
                             .foregroundStyle(.primary)
                     }
                     .tint(.primary)
+                    .accessibilityLabel("More")
                 }
                 ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 ToolbarItem(placement: .topBarTrailing) {
@@ -91,8 +92,17 @@ struct LibraryView: View {
                             layout.isVisible(section)
                                 ? accent.color : .secondary
                         )
+                        .frame(width: 44, height: 44)
+                        .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        layout.isVisible(section)
+                            ? "Hide \(section.title)" : "Show \(section.title)"
+                    )
+                    .accessibilityAddTraits(
+                        layout.isVisible(section) ? .isSelected : []
+                    )
 
                     Image(systemName: section.systemImage)
                         .font(.title3)

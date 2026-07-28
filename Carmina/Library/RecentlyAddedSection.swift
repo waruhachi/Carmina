@@ -11,10 +11,16 @@ struct RecentlyAddedSection: View {
     @ObserveInjection var inject
 
     @Environment(DeviceLibrary.self) private var library
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16),
-    ]
+    private var columns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible(), spacing: 16)]
+            : [
+                GridItem(.flexible(), spacing: 16),
+                GridItem(.flexible(), spacing: 16),
+            ]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

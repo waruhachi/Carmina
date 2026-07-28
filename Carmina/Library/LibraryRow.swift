@@ -27,7 +27,7 @@ struct LibraryRow: View {
                 .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 20)
-        .frame(height: 56)
+        .frame(minHeight: 56)
         .contentShape(.rect)
     }
 }

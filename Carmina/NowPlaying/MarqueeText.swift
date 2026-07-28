@@ -10,6 +10,8 @@ import SwiftUI
 struct MarqueeText: View {
     @ObserveInjection var inject
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var textSize: CGSize = .zero
     @State private var animate = false
 
@@ -24,7 +26,8 @@ struct MarqueeText: View {
     var body: some View {
         GeometryReader { geo in
             let viewWidth = geo.size.width
-            let scrolls = textSize.width > viewWidth
+            let scrolls = textSize.width > viewWidth && !reduceMotion
+
             ZStack {
                 animatedText(viewWidth: viewWidth).opacity(scrolls ? 1 : 0)
                 staticText.opacity(scrolls ? 0 : 1)
@@ -45,7 +48,7 @@ struct MarqueeText: View {
                 .hidden()
         }
         .onChange(of: textSize) {
-            guard !animate, textSize.width > 0 else { return }
+            guard !animate, textSize.width > 0, !reduceMotion else { return }
             withAnimation(marqueeAnimation) { animate = true }
         }
     }

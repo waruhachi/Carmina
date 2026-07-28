@@ -43,6 +43,7 @@ struct TrackArtwork: View {
                     size: CGSize(width: px, height: px)
                 )
             }
+            .accessibilityHidden(true)
     }
 
     private var fillStyle: Color {

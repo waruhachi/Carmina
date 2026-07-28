@@ -14,7 +14,7 @@ struct PlayerInfo: View {
     var song: Song?
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 0) {
             Group {
                 if let song {
                     TrackArtwork(song: song, size: size, radius: size / 5)
@@ -32,7 +32,7 @@ struct PlayerInfo: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 MarqueeText(song?.title ?? "Not Playing")
-                    .font(.subheadline)
+                    .font(.subheadline.weight(.semibold))
                     .id(song?.title ?? "Not Playing")
                 if let artist = song?.artist, !artist.isEmpty {
                     MarqueeText(artist)

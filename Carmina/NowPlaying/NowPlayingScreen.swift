@@ -18,7 +18,10 @@ struct NowPlayingScreen: View {
 
     @Environment(PlayerCoordinator.self) private var player
     @Environment(DeviceLibrary.self) private var library
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
 
+    @State private var transportHaptic = 0
     @State private var systemAudio = SystemAudio()
     @State private var artImage: Image?
     @State private var artworkAspect: CGFloat = 1
@@ -26,6 +29,7 @@ struct NowPlayingScreen: View {
     @State private var minVolumeTrigger = false
     @State private var maxVolumeTrigger = false
     @State private var showLyrics = false
+    @State private var showQueue = false
     @State private var backwardTrigger: PlayerButtonTrigger = .one(
         bouncing: false
     )
@@ -55,6 +59,8 @@ struct NowPlayingScreen: View {
         !(player.current?.lyrics?.isEmpty ?? true)
     }
 
+    private var scrimOpacity: Double { contrast == .increased ? 0.75 : 0.55 }
+
     var body: some View {
         Group {
             if fullscreenArtwork {
@@ -73,11 +79,15 @@ struct NowPlayingScreen: View {
             }
         #endif
         .task(id: player.current?.id) { await refreshArtwork() }
+        .sensoryFeedback(.impact(weight: .light), trigger: transportHaptic)
         .sheet(isPresented: $showLyrics) {
             LyricsView(
                 title: player.current?.title ?? "",
                 lyrics: player.current?.lyrics ?? ""
             )
+        }
+        .sheet(isPresented: $showQueue) {
+            QueueView()
         }
     }
 
@@ -116,7 +126,7 @@ extension NowPlayingScreen {
                 Spacer(minLength: 0)
                 controlStack
                     .padding(.horizontal, 28)
-                    .padding(.bottom, 0)
+                    .padding(.bottom, 10)
             }
             grip
         }
@@ -129,7 +139,7 @@ extension NowPlayingScreen {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             controlStack
                 .padding(.horizontal, 28)
-                .padding(.bottom, 0)
+                .padding(.bottom, 10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(meshBackground)
@@ -161,8 +171,14 @@ extension NowPlayingScreen {
                 LinearGradient(
                     stops: [
                         .init(color: .clear, location: 0.35),
-                        .init(color: .black.opacity(0.55), location: 0.80),
-                        .init(color: .black.opacity(0.55), location: 1.0),
+                        .init(
+                            color: .black.opacity(scrimOpacity),
+                            location: 0.80
+                        ),
+                        .init(
+                            color: .black.opacity(scrimOpacity),
+                            location: 1.0
+                        ),
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -211,8 +227,15 @@ extension NowPlayingScreen {
             let side = min(geo.size.width, geo.size.height)
             let small = !player.isPlaying
             let nonSquare = abs(artworkAspect - 1) > 0.1
-            let pad: CGFloat =
-                nonSquare ? (small ? 90 : 48) : (small ? 48 : 0)
+
+            let playingPad: CGFloat = nonSquare ? 48 : 0
+            let pausedPad: CGFloat = nonSquare ? 90 : 50
+            let pad = small ? pausedPad : playingPad
+
+            let playingOffsetY: CGFloat = 10
+            let pausedOffsetY: CGFloat = 10
+            let offsetY = small ? pausedOffsetY : playingOffsetY
+
             Group {
                 if let artImage {
                     artImage.resizable().aspectRatio(contentMode: .fill)
@@ -234,7 +257,8 @@ extension NowPlayingScreen {
             )
             .frame(width: side, height: side)
             .frame(width: geo.size.width, height: geo.size.height)
-            .animation(.smooth, value: player.isPlaying)
+            .offset(y: offsetY)
+            .animation(reduceMotion ? nil : .smooth, value: player.isPlaying)
         }
         .padding(.horizontal, 25)
     }
@@ -242,7 +266,7 @@ extension NowPlayingScreen {
     fileprivate var meshBackground: some View {
         #if canImport(UIKit)
             ColorfulBackground(colors: palette)
-                .overlay(.black.opacity(0.25))
+                .overlay(.black.opacity(contrast == .increased ? 0.4 : 0.25))
                 .ignoresSafeArea()
         #else
             NowPlayingBackground(colors: palette)
@@ -256,10 +280,10 @@ extension NowPlayingScreen {
     fileprivate var controlStack: some View {
         VStack(spacing: 0) {
             titleRow
-            scrubber.padding(.top, 15)
-            transport.padding(.top, 20)
-            volumeSlider.padding(.top, 35)
-            footer.padding(.top, 15)
+            scrubber.padding(.top, 18)
+            controls.padding(.top, 22)
+            volumeSlider.padding(.top, 40)
+            footer
         }
     }
 }
@@ -274,6 +298,7 @@ extension NowPlayingScreen {
                     .font(.title3.weight(.semibold))
                     .id(player.current?.title ?? "")
                 MarqueeText(player.current?.artist ?? "")
+                    .font(.title3)
                     .foregroundStyle(.white.opacity(0.7))
                     .id(player.current?.artist ?? "")
             }
@@ -283,12 +308,13 @@ extension NowPlayingScreen {
                     SongMenu(song: song)
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.title3.weight(.bold))
                         .foregroundStyle(.white)
-                        .frame(width: 30, height: 30)
+                        .frame(width: 44, height: 44)
                         .contentShape(.rect)
                 }
                 .tint(.primary)
+                .accessibilityLabel("More")
             }
         }
     }
@@ -299,13 +325,13 @@ extension NowPlayingScreen {
             in: 0...max(player.duration, 1),
             leadingLabel: {
                 Text(player.currentTime.asTimeString(style: .positional))
-                    .font(.caption).padding(.top, 8)
+                    .font(.caption.weight(.semibold)).padding(.top, 8)
             },
             trailingLabel: {
                 Text(
                     ((player.duration - player.currentTime) * -1)
                         .asTimeString(style: .positional)
-                ).font(.caption).padding(.top, 8)
+                ).font(.caption.weight(.semibold)).padding(.top, 8)
             }
         )
         .sliderStyle(.playbackProgress)
@@ -317,9 +343,23 @@ extension NowPlayingScreen {
                     .foregroundStyle(.white.opacity(0.7))
             }
         }
+        .accessibilityElement()
+        .accessibilityLabel("Playback position")
+        .accessibilityValue(player.currentTime.asTimeString(style: .positional))
+        .accessibilityAdjustableAction { direction in
+            let step = max(player.duration * 0.05, 5)
+            switch direction {
+            case .increment:
+                player.seek(to: min(player.currentTime + step, player.duration))
+            case .decrement:
+                player.seek(to: max(player.currentTime - step, 0))
+            @unknown default:
+                break
+            }
+        }
     }
 
-    fileprivate var transport: some View {
+    fileprivate var controls: some View {
         HStack(spacing: 24) {
             PlayerButton(
                 label: {
@@ -331,9 +371,13 @@ extension NowPlayingScreen {
                 },
                 onEnded: {
                     backwardTrigger.toggle(bouncing: true)
+                    transportHaptic += 1
                     player.previous()
                 }
             )
+            .accessibilityLabel("Previous track")
+            .accessibilityAddTraits(.isButton)
+
             PlayerButton(
                 label: {
                     PlayerButtonLabel(
@@ -341,8 +385,14 @@ extension NowPlayingScreen {
                         size: 34
                     )
                 },
-                onEnded: { player.togglePlayPause() }
+                onEnded: {
+                    transportHaptic += 1
+                    player.togglePlayPause()
+                }
             )
+            .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+            .accessibilityAddTraits(.isButton)
+
             PlayerButton(
                 label: {
                     PlayerButtonLabel(
@@ -353,9 +403,12 @@ extension NowPlayingScreen {
                 },
                 onEnded: {
                     forwardTrigger.toggle(bouncing: true)
+                    transportHaptic += 1
                     player.next()
                 }
             )
+            .accessibilityLabel("Next track")
+            .accessibilityAddTraits(.isButton)
         }
         .playerButtonStyle(
             .init(
@@ -383,11 +436,29 @@ extension NowPlayingScreen {
             }
         )
         .sliderStyle(.volume)
-        .font(.system(size: 14))
+        .font(.footnote)
         .frame(height: 50)
+        .padding(.horizontal, -10)
         .onChange(of: systemAudio.volume) {
+            guard !reduceMotion else { return }
             if systemAudio.volume == 0 { minVolumeTrigger.toggle() }
             if systemAudio.volume == 1 { maxVolumeTrigger.toggle() }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Volume")
+        .accessibilityValue(
+            "\(Int((systemAudio.volume * 100).rounded())) percent"
+        )
+        .accessibilityAdjustableAction { direction in
+            let step = 0.0625
+            switch direction {
+            case .increment:
+                systemAudio.setVolume(min(systemAudio.volume + step, 1))
+            case .decrement:
+                systemAudio.setVolume(max(systemAudio.volume - step, 0))
+            @unknown default:
+                break
+            }
         }
     }
 
@@ -397,18 +468,19 @@ extension NowPlayingScreen {
                 showLyrics = true
             } label: {
                 Image(systemName: "quote.bubble")
-                    .frame(width: 30, height: 30)
+                    .frame(width: 44, height: 44)
                     .contentShape(.rect)
                     .opacity(hasLyrics ? 1 : 0.15)
             }
             .disabled(!hasLyrics)
+            .accessibilityLabel("Lyrics")
 
             Spacer()
 
             VStack(spacing: 16) {
                 #if os(iOS)
                     RoutePickerView()
-                        .frame(width: 30, height: 30)
+                        .frame(width: 44, height: 44)
                         .scaleEffect(1.35)
                 #else
                     Image(systemName: "airplay.audio")
@@ -422,16 +494,18 @@ extension NowPlayingScreen {
             Spacer()
 
             Button {
+                showQueue = true
             } label: {
                 Image(systemName: "list.bullet")
-                    .frame(width: 30, height: 30)
+                    .frame(width: 44, height: 44)
                     .contentShape(.rect)
             }
+            .accessibilityLabel("Queue")
         }
         .frame(maxWidth: .infinity)
         .font(.title2)
         .foregroundStyle(.white.opacity(0.7))
         .padding(.horizontal, 80)
-        .padding(.top, 15)
+        .padding(.top, 5)
     }
 }

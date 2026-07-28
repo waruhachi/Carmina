@@ -21,13 +21,19 @@ class ColorfulBackgroundModel: @unchecked Sendable {
     private var animatedData: ColorPoints = .zero
     private var animatioTimerCancellable: AnyCancellable?
 
-    func onAppear() {
+    func onAppear(reduceMotion: Bool) {
         if !shown {
             shown = true
-            animate()  // shuffle only the first time
-            animatedData = points
+            if reduceMotion {
+                points = points.shuffled
+                animatedData = points
+                points = animatedData.colored(colors: colors)
+            } else {
+                animate()
+                animatedData = points
+            }
         }
-        startTimer()
+        if !reduceMotion { startTimer() }
     }
 
     func onDisappear() {

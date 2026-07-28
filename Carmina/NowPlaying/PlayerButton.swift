@@ -12,6 +12,7 @@ struct PlayerButton<Content: View>: View {
 
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.playerButtonConfig) var config
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var showCircle = false
     @State private var pressed = false
@@ -35,17 +36,17 @@ struct PlayerButton<Content: View>: View {
 
     var body: some View {
         label
-            .scaleEffect(pressed ? 0.9 : 1)
+            .scaleEffect(pressed && !reduceMotion ? 0.9 : 1)
             .frame(width: config.size, height: config.size)
             .foregroundStyle(color)
             .background(showCircle ? config.tint : .clear)
             .clipShape(Ellipse())
-            .scaleEffect(pressed ? 0.85 : 1)
+            .scaleEffect(pressed && !reduceMotion ? 0.85 : 1)
             .onPressGesture(
-                interval: config.updateUnterval,
+                interval: config.updateInterval,
                 onPressed: {
                     guard isEnabled else { return }
-                    withAnimation {
+                    withAnimation(reduceMotion ? nil : .default) {
                         showCircle = true
                         pressed = true
                     }
@@ -59,10 +60,14 @@ struct PlayerButton<Content: View>: View {
                     guard isEnabled else { return }
                     delay(0.2) {
                         Task { @MainActor in
-                            withAnimation { showCircle = false }
+                            withAnimation(reduceMotion ? nil : .default) {
+                                showCircle = false
+                            }
                         }
                     }
-                    withAnimation { pressed = false }
+                    withAnimation(reduceMotion ? nil : .default) {
+                        pressed = false
+                    }
                     onEnded?()
                 }
             )
@@ -96,7 +101,7 @@ extension EnvironmentValues {
 }
 
 struct PlayerButtonConfig {
-    let updateUnterval: TimeInterval
+    let updateInterval: TimeInterval
     let size: CGFloat
     let labelColor: Color
     let tint: Color
@@ -104,14 +109,14 @@ struct PlayerButtonConfig {
     let disabledColor: Color
 
     init(
-        updateUnterval: TimeInterval = 0.1,
+        updateInterval: TimeInterval = 0.1,
         size: CGFloat = 68,
         labelColor: Color = .white,
         tint: Color = .white.opacity(0.2),
         pressedColor: Color = .white.opacity(0.7),
         disabledColor: Color = .white.opacity(0.3)
     ) {
-        self.updateUnterval = updateUnterval
+        self.updateInterval = updateInterval
         self.size = size
         self.labelColor = labelColor
         self.tint = tint
