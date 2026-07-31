@@ -11,7 +11,12 @@ struct SongRow: View {
     @ObserveInjection var inject
 
     @Environment(PlayerCoordinator.self) private var player
-    @Environment(DeviceLibrary.self) private var library
+    @Environment(Library.self) private var library
+
+    @State private var editing = false
+    #if canImport(UIKit)
+        @State private var shareItem: ShareURL?
+    #endif
 
     let song: Song
     var onDelete: () -> Void
@@ -25,8 +30,29 @@ struct SongRow: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
+            if library.needsReviewIDs.contains(song.id) {
+                Image(systemName: "questionmark.circle")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+                    .accessibilityLabel("Needs review")
+            }
             Menu {
-                SongMenu(song: song, onDelete: onDelete)
+                SongMenu(
+                    song: song,
+                    onDelete: onDelete,
+                    onEditMetadata: { editing = true },
+                    onShare: {
+                        #if canImport(UIKit)
+                            Task {
+                                if let url = await library.exportForSharing(
+                                    song
+                                ) {
+                                    shareItem = ShareURL(url: url)
+                                }
+                            }
+                        #endif
+                    }
+                )
             } label: {
                 Image(systemName: "ellipsis")
                     .foregroundStyle(.primary)
@@ -38,13 +64,26 @@ struct SongRow: View {
         .tint(.primary)
         .contentShape(.rect)
         .contextMenu {
-            SongMenu(song: song, onDelete: onDelete)
-                .environment(player)
+            SongMenu(
+                song: song,
+                onDelete: onDelete,
+                onEditMetadata: { editing = true }
+            )
+            .environment(player)
         } preview: {
             menuPreview
                 .environment(library)
                 .environment(player)
         }
+        .sheet(isPresented: $editing) {
+            MetadataEditorView(song: song).environment(library)
+                .environment(player)
+        }
+        #if canImport(UIKit)
+            .sheet(item: $shareItem) { item in
+                ShareSheet(items: [item.url])
+            }
+        #endif
     }
 
     private var menuPreview: some View {

@@ -27,7 +27,7 @@ struct TabRootView: View {
                     role: section == .search ? .search : nil
                 ) {
                     NavigationStack {
-                        if section == .library {
+                        if section == .library || section == .local {
                             section.destination
                         } else {
                             section.destination.settingsToolbar()

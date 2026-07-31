@@ -30,7 +30,7 @@ struct SidebarRootView: View {
             NavigationStack {
                 Group {
                     let section = selection ?? .library
-                    if section == .library {
+                    if section == .library || section == .local {
                         section.destination
                     } else {
                         section.destination.settingsToolbar()

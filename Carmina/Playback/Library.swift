@@ -1,0 +1,646 @@
+//
+//  Library.swift
+//  Carmina
+//
+//  Created by waru on 7/30/26.
+//
+
+import AVFoundation
+import CarminaMatch
+import CarminaTagging
+import SwiftData
+import SwiftUI
+
+#if canImport(UIKit)
+    import UIKit
+#endif
+
+@MainActor
+@Observable
+final class Library {
+    @ObservationIgnored weak var player: PlayerCoordinator?
+
+    private let device: DeviceLibrary
+    private let context: ModelContext
+
+    private let matcher = ITunesSearchClient()
+    private var isMatching = false
+
+    private let artworkStore = ArtworkStore()
+    private let tagWriter = TagWriter()
+
+    private(set) var imported: [Song] = []
+    private(set) var deviceSongs: [Song] = []
+
+    private(set) var needsReviewIDs: Set<UUID> = []
+    private(set) var revertableIDs: Set<UUID> = []
+
+    private struct OverrideValues {
+        var title: String?
+        var artist: String?
+        var album: String?
+        var artworkCacheKey: String?
+    }
+    private var overrides: [String: OverrideValues] = [:]
+
+    init(device: DeviceLibrary, context: ModelContext) {
+        self.device = device
+        self.context = context
+    }
+
+    var state: DeviceLibrary.LoadState { device.state }
+
+    var songs: [Song] { deviceSongs + imported }
+
+    var recentlyAdded: [Song] {
+        Array(songs.sorted { $0.dateAdded > $1.dateAdded }.prefix(50))
+    }
+
+    func load() async {
+        await device.load()
+        reloadOverrides()
+        rebuildDeviceSongs()
+        reloadImported()
+        startMatching()
+    }
+
+    func remove(_ song: Song) {
+        if song.isLocal {
+            removeImported(song)
+        } else {
+            device.remove(song)
+            rebuildDeviceSongs()
+        }
+        player?.removeFromQueue(id: song.id)
+    }
+
+    func importFiles(_ urls: [URL]) {
+        Task { await performImport(urls) }
+    }
+
+    // MARK: - Artwork
+
+    func artworkImage(for song: Song, size: CGSize) -> Image? {
+        if let key = song.artworkCacheKey {
+            return artworkStore.image(for: key)
+        }
+        if let pid = song.persistentID {
+            return device.artworkImage(for: pid, size: size)
+        }
+        return nil
+    }
+
+    #if canImport(MediaPlayer)
+        func artworkUIImage(for song: Song) -> UIImage? {
+            if let key = song.artworkCacheKey {
+                return artworkStore.uiImage(for: key)
+            }
+            if let pid = song.persistentID {
+                return device.artworkUIImage(for: pid)
+            }
+            return nil
+        }
+    #endif
+
+    // MARK: - Imported store
+
+    private var localLibraryDir: URL? {
+        let fm = FileManager.default
+        guard
+            let base = try? fm.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+        else { return nil }
+        return base.appendingPathComponent("LocalLibrary", isDirectory: true)
+    }
+
+    private func reloadImported() {
+        guard let dir = localLibraryDir else {
+            imported = []
+            needsReviewIDs = []
+            return
+        }
+        let descriptor = FetchDescriptor<Track>(
+            sortBy: [SortDescriptor(\.dateAdded, order: .reverse)]
+        )
+        let tracks = (try? context.fetch(descriptor)) ?? []
+        imported = tracks.map { t in
+            Song(
+                id: t.id,
+                title: t.title,
+                artist: t.artist,
+                album: t.album,
+                dateAdded: t.dateAdded,
+                isLocal: true,
+                persistentID: nil,
+                assetURL: t.localRelativePath.map {
+                    dir.appendingPathComponent($0)
+                },
+                lyrics: t.lyrics,
+                artworkCacheKey: t.artworkCacheKey
+            )
+        }
+        needsReviewIDs = Set(
+            tracks
+                .filter { $0.matchState == .unmatched && $0.matchAttempted }
+                .map(\.id)
+        )
+        revertableIDs = Set(
+            tracks.filter { $0.matchState != .unmatched }.map(\.id)
+        )
+    }
+
+    private func removeImported(_ song: Song) {
+        let id = song.id
+        let descriptor = FetchDescriptor<Track>(
+            predicate: #Predicate { $0.id == id }
+        )
+        guard let track = try? context.fetch(descriptor).first else { return }
+        if let rel = track.localRelativePath, let dir = localLibraryDir {
+            try? FileManager.default.removeItem(
+                at: dir.appendingPathComponent(rel)
+            )
+        }
+        context.delete(track)
+        try? context.save()
+        reloadImported()
+    }
+
+    /// Copies a picked file into the container, coordinating access and
+    /// downloading it first if it's an iCloud-Drive placeholder.
+    private func copyIntoLibrary(from url: URL, to dest: URL) async throws {
+        await ensureDownloaded(url)
+
+        let fm = FileManager.default
+        var coordinationError: NSError?
+        var copyError: Error?
+        NSFileCoordinator().coordinate(
+            readingItemAt: url,
+            options: [],
+            error: &coordinationError
+        ) { readURL in
+            do {
+                if fm.fileExists(atPath: dest.path) {
+                    try fm.removeItem(at: dest)
+                }
+                try fm.copyItem(at: readURL, to: dest)
+            } catch {
+                copyError = error
+            }
+        }
+        if let coordinationError { throw coordinationError }
+        if let copyError { throw copyError }
+    }
+
+    /// If the URL is a non-downloaded iCloud item, start the download and
+    /// wait (up to ~30s) for it to materialize.
+    private func ensureDownloaded(_ url: URL) async {
+        let fm = FileManager.default
+        guard
+            let values = try? url.resourceValues(forKeys: [
+                .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey,
+            ]),
+            values.isUbiquitousItem == true
+        else { return }
+
+        if values.ubiquitousItemDownloadingStatus == .current { return }
+        try? fm.startDownloadingUbiquitousItem(at: url)
+
+        for _ in 0..<60 {
+            try? await Task.sleep(for: .milliseconds(500))
+            if let v = try? url.resourceValues(
+                forKeys: [.ubiquitousItemDownloadingStatusKey]
+            ), v.ubiquitousItemDownloadingStatus == .current {
+                return
+            }
+        }
+    }
+
+    private func performImport(_ urls: [URL]) async {
+        let fm = FileManager.default
+        guard let dir = localLibraryDir else { return }
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        for url in urls {
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+            let ext = url.pathExtension.isEmpty ? "m4a" : url.pathExtension
+            let filename = "\(UUID().uuidString).\(ext)"
+            let dest = dir.appendingPathComponent(filename)
+            do {
+                try await copyIntoLibrary(from: url, to: dest)
+            } catch {
+                continue
+            }
+
+            let fallback = url.deletingPathExtension().lastPathComponent
+            let meta = await readEmbeddedMetadata(dest)
+            let hasTitle = !meta.title.isEmpty
+            let title = hasTitle ? meta.title : fallback
+
+            var artworkKey: String?
+            if let data = meta.artworkData {
+                let key = UUID().uuidString
+                artworkStore.store(data, key: key)
+                artworkKey = key
+            }
+
+            let complete =
+                hasTitle && !meta.artist.isEmpty && !meta.album.isEmpty
+                && artworkKey != nil
+
+            context.insert(
+                Track(
+                    source: .imported,
+                    title: title,
+                    artist: meta.artist,
+                    album: meta.album,
+                    dateAdded: Date(),
+                    localRelativePath: filename,
+                    fileFormat: ext,
+                    importedFileName: fallback,
+                    artworkCacheKey: artworkKey,
+                    matchState: complete ? .matched : .unmatched,
+                    matchAttempted: complete
+                )
+            )
+        }
+
+        try? context.save()
+        reloadImported()
+        startMatching()
+    }
+
+    private func readEmbeddedMetadata(
+        _ url: URL
+    ) async -> (
+        title: String, artist: String, album: String, artworkData: Data?
+    ) {
+        let asset = AVURLAsset(url: url)
+        var title = ""
+        var artist = ""
+        var album = ""
+        var artworkData: Data?
+        if let items = try? await asset.load(.commonMetadata) {
+            for item in items {
+                guard let key = item.commonKey else { continue }
+                switch key {
+                case .commonKeyTitle:
+                    if let v = try? await item.load(.stringValue) { title = v }
+                case .commonKeyArtist:
+                    if let v = try? await item.load(.stringValue) { artist = v }
+                case .commonKeyAlbumName:
+                    if let v = try? await item.load(.stringValue) { album = v }
+                case .commonKeyArtwork:
+                    if let d = try? await item.load(.dataValue) {
+                        artworkData = d
+                    }
+                default:
+                    break
+                }
+            }
+        }
+        return (title, artist, album, artworkData)
+    }
+
+    // MARK: - Auto-matching (iTunes)
+
+    func startMatching() {
+        guard !isMatching else { return }
+        Task { await matchUnmatched() }
+    }
+
+    private func matchUnmatched() async {
+        isMatching = true
+        defer { isMatching = false }
+        guard let dir = localLibraryDir else { return }
+
+        while true {
+            // raw-string compare because #Predicate can't use the enum directly
+            var descriptor = FetchDescriptor<Track>(
+                predicate: #Predicate {
+                    $0.sourceRaw == "imported"
+                        && $0.matchStateRaw == "unmatched"
+                        && $0.matchAttempted == false
+                }
+            )
+            descriptor.fetchLimit = 1
+            guard let track = try? context.fetch(descriptor).first else {
+                break
+            }
+
+            await matchOne(track, dir: dir)
+            reloadImported()
+            try? await Task.sleep(for: .seconds(3))  // iTunes rate limit
+        }
+    }
+
+    private func matchOne(_ track: Track, dir: URL) async {
+        var duration: Double?
+        if let rel = track.localRelativePath {
+            let asset = AVURLAsset(url: dir.appendingPathComponent(rel))
+            if let cm = try? await asset.load(.duration), cm.seconds.isFinite {
+                duration = cm.seconds
+            }
+        }
+
+        let term = [track.artist, track.title]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        print("🎵 term:", term)
+
+        guard
+            !term.isEmpty,
+            let candidates = try? await matcher.search(term: term),
+            !candidates.isEmpty
+        else {
+            print("🎵 no candidates / search failed")
+            track.matchAttempted = true
+            try? context.save()
+            return
+        }
+        print("🎵 candidates:", candidates.count)
+
+        let query = MetadataQuery(
+            title: track.title,
+            artist: track.artist,
+            durationSeconds: duration
+        )
+        guard let best = MatchScorer.best(candidates, for: query),
+            best.confidence >= 0.75
+        else {
+            let top = MatchScorer.scored(candidates, for: query).first
+            print(
+                "🎵 below threshold — best:",
+                top?.title ?? "-",
+                "conf:",
+                top?.confidence ?? 0
+            )
+            track.matchAttempted = true
+            try? context.save()
+            return
+        }
+        print(
+            "🎵 matched:",
+            best.title,
+            "by",
+            best.artist,
+            "conf:",
+            best.confidence
+        )
+
+        let textComplete =
+            !track.title.isEmpty && !track.artist.isEmpty
+            && !track.album.isEmpty
+
+        if !textComplete {
+            track.title = best.title
+            track.artist = best.artist
+            track.album = best.album
+        }
+
+        track.matchedStoreID = String(best.id)
+        track.matchConfidence = best.confidence
+        track.matchState = .matched
+
+        try? context.save()
+        reloadImported()
+
+        if track.artworkCacheKey == nil,
+            let artURL = best.artworkURL,
+            let (data, _) = try? await URLSession.shared.data(from: artURL)
+        {
+            let key = String(best.id)
+            artworkStore.store(data, key: key)
+            track.artworkCacheKey = key
+            try? context.save()
+        }
+    }
+
+    func searchMatches(_ term: String) async -> [MatchCandidate] {
+        (try? await matcher.search(term: term, limit: 25)) ?? []
+    }
+
+    func applyEdit(
+        to song: Song,
+        title: String,
+        artist: String,
+        album: String,
+        newArtworkData: Data?
+    ) async {
+        if song.isLocal {
+            let songID = song.id
+            let descriptor = FetchDescriptor<Track>(
+                predicate: #Predicate { $0.id == songID }
+            )
+            guard let track = try? context.fetch(descriptor).first else {
+                return
+            }
+            track.title = title
+            track.artist = artist
+            track.album = album
+            track.matchState = .manual
+            track.matchAttempted = true
+            if let data = newArtworkData {
+                let key = UUID().uuidString
+                artworkStore.store(data, key: key)
+                track.artworkCacheKey = key
+            }
+            try? context.save()
+            reloadImported()
+        } else if let pid = song.persistentID {
+            let key = String(pid)
+            let descriptor = FetchDescriptor<MetadataOverride>(
+                predicate: #Predicate { $0.devicePersistentID == key }
+            )
+            let existing = try? context.fetch(descriptor).first
+            let override = existing ?? MetadataOverride(devicePersistentID: key)
+            override.title = title
+            override.artist = artist
+            override.album = album
+            override.dateModified = Date()
+            if let data = newArtworkData {
+                let artKey = UUID().uuidString
+                artworkStore.store(data, key: artKey)
+                override.artworkCacheKey = artKey
+            }
+            if existing == nil { context.insert(override) }
+            try? context.save()
+            reloadOverrides()
+            rebuildDeviceSongs()
+        }
+
+        if let updated = songs.first(where: { $0.id == song.id }) {
+            player?.updateSong(updated)
+        }
+    }
+
+    private func reloadOverrides() {
+        let rows =
+            (try? context.fetch(FetchDescriptor<MetadataOverride>())) ?? []
+        overrides = Dictionary(
+            rows.map {
+                (
+                    $0.devicePersistentID,
+                    OverrideValues(
+                        title: $0.title,
+                        artist: $0.artist,
+                        album: $0.album,
+                        artworkCacheKey: $0.artworkCacheKey
+                    )
+                )
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    private func rebuildDeviceSongs() {
+        deviceSongs = device.songs.map(applyingOverride)
+    }
+
+    private func applyingOverride(_ song: Song) -> Song {
+        guard let pid = song.persistentID,
+            let o = overrides[String(pid)]
+        else { return song }
+        return Song(
+            id: song.id,
+            title: o.title ?? song.title,
+            artist: o.artist ?? song.artist,
+            album: o.album ?? song.album,
+            dateAdded: song.dateAdded,
+            isLocal: song.isLocal,
+            persistentID: song.persistentID,
+            assetURL: song.assetURL,
+            lyrics: song.lyrics,
+            artworkCacheKey: o.artworkCacheKey ?? song.artworkCacheKey
+        )
+    }
+
+    func hasOverride(for song: Song) -> Bool {
+        guard let pid = song.persistentID else { return false }
+        return overrides[String(pid)] != nil
+    }
+
+    func removeOverride(for song: Song) {
+        guard let pid = song.persistentID else { return }
+        let key = String(pid)
+        let descriptor = FetchDescriptor<MetadataOverride>(
+            predicate: #Predicate { $0.devicePersistentID == key }
+        )
+        if let existing = try? context.fetch(descriptor).first {
+            if let artKey = existing.artworkCacheKey {
+                artworkStore.remove(artKey)
+            }
+            context.delete(existing)
+            try? context.save()
+        }
+        reloadOverrides()
+        rebuildDeviceSongs()
+        if let updated = songs.first(where: { $0.id == song.id }) {
+            player?.updateSong(updated)
+        }
+    }
+
+    func canRevert(_ song: Song) -> Bool {
+        if song.isLocal { return revertableIDs.contains(song.id) }
+        return hasOverride(for: song)
+    }
+
+    func revertToOriginal(_ song: Song) async {
+        if song.isLocal {
+            let songID = song.id
+            guard let dir = localLibraryDir else { return }
+            let descriptor = FetchDescriptor<Track>(
+                predicate: #Predicate { $0.id == songID }
+            )
+            guard let track = try? context.fetch(descriptor).first,
+                let rel = track.localRelativePath
+            else { return }
+
+            let meta = await readEmbeddedMetadata(
+                dir.appendingPathComponent(rel)
+            )
+            track.title =
+                meta.title.isEmpty
+                ? (track.importedFileName ?? track.title) : meta.title
+            track.artist = meta.artist
+            track.album = meta.album
+
+            if let oldKey = track.artworkCacheKey {
+                artworkStore.remove(oldKey)
+            }
+            if let artData = meta.artworkData {
+                let key = UUID().uuidString
+                artworkStore.store(artData, key: key)
+                track.artworkCacheKey = key
+            } else {
+                track.artworkCacheKey = nil
+            }
+            track.matchState = .manual  // keep the original; don't auto-re-match
+            track.matchAttempted = true
+            try? context.save()
+            reloadImported()
+        } else if song.persistentID != nil {
+            removeOverride(for: song)  // already reloads + updates the player
+            return
+        }
+
+        if let updated = songs.first(where: { $0.id == song.id }) {
+            player?.updateSong(updated)
+        }
+    }
+
+    func exportForSharing(_ song: Song) async -> URL? {
+        guard song.isLocal, let dir = localLibraryDir else { return nil }
+        let songID = song.id
+        let descriptor = FetchDescriptor<Track>(
+            predicate: #Predicate { $0.id == songID }
+        )
+        guard let track = try? context.fetch(descriptor).first,
+            let rel = track.localRelativePath
+        else { return nil }
+
+        let source = dir.appendingPathComponent(rel)
+        let ext = track.fileFormat ?? source.pathExtension
+        let name = shareFileName(for: track)
+
+        let fm = FileManager.default
+        let shareDir = fm.temporaryDirectory
+            .appendingPathComponent("Share", isDirectory: true)
+        try? fm.createDirectory(at: shareDir, withIntermediateDirectories: true)
+        let dest = shareDir.appendingPathComponent("\(name).\(ext)")
+        try? fm.removeItem(at: dest)
+        do {
+            try fm.copyItem(at: source, to: dest)
+        } catch {
+            return nil
+        }
+
+        // Embed current metadata (best-effort; MP3/M4A only).
+        let artwork = track.artworkCacheKey.flatMap {
+            artworkStore.data(for: $0)
+        }
+        let meta = TagMetadata(
+            title: track.title,
+            artist: track.artist,
+            album: track.album,
+            artwork: artwork
+        )
+        try? await tagWriter.write(meta, to: dest)
+
+        return dest
+    }
+
+    private func shareFileName(for track: Track) -> String {
+        let base = [track.artist, track.title]
+            .filter { !$0.isEmpty }
+            .joined(separator: " - ")
+        let name = base.isEmpty ? (track.importedFileName ?? "Track") : base
+        let invalid = CharacterSet(charactersIn: "/\\:?%*|\"<>")
+        return name.components(separatedBy: invalid).joined(separator: "_")
+    }
+}

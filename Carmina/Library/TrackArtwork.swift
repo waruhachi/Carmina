@@ -10,7 +10,7 @@ import SwiftUI
 struct TrackArtwork: View {
     @ObserveInjection var inject
 
-    @Environment(DeviceLibrary.self) private var library
+    @Environment(Library.self) private var library
 
     @State private var image: Image?
 
@@ -36,10 +36,10 @@ struct TrackArtwork: View {
             .clipShape(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
             )
-            .task(id: song.id) {
+            .task(id: song) {
                 let px = (size ?? 300) * 2
                 image = library.artworkImage(
-                    for: song.persistentID,
+                    for: song,
                     size: CGSize(width: px, height: px)
                 )
             }

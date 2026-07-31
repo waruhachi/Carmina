@@ -14,8 +14,21 @@ struct SongMenu: View {
 
     let song: Song
     var onDelete: (() -> Void)? = nil
+    var onEditMetadata: (() -> Void)? = nil
+    var onShare: (() -> Void)? = nil
 
     var body: some View {
+        #if canImport(UIKit)
+            Section {
+                if song.isLocal, let onShare {
+                    Section {
+                        Button("Share", systemImage: "square.and.arrow.up") {
+                            onShare()
+                        }
+                    }
+                }
+            }
+        #endif
         Section {
             Button("Add to Playlist", systemImage: "text.badge.plus") {}
         }
@@ -32,7 +45,13 @@ struct SongMenu: View {
             }
         }
         Section {
-            Button("Go to Album", systemImage: "square.stack") {}
+            if let onEditMetadata {
+                Section {
+                    Button("Edit Metadata", systemImage: "pencil") {
+                        onEditMetadata()
+                    }
+                }
+            }
             Button("View Credits", systemImage: "info.circle") {}
         }
         if let onDelete, song.isLocal {

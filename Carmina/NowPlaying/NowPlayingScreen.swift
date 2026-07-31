@@ -17,7 +17,7 @@ struct NowPlayingScreen: View {
     @AppStorage("fullscreenArtwork") private var fullscreenArtwork = false
 
     @Environment(PlayerCoordinator.self) private var player
-    @Environment(DeviceLibrary.self) private var library
+    @Environment(Library.self) private var library
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -78,7 +78,7 @@ struct NowPlayingScreen: View {
                 .allowsHitTesting(false)
             }
         #endif
-        .task(id: player.current?.id) { await refreshArtwork() }
+        .task(id: player.current) { await refreshArtwork() }
         .sensoryFeedback(.impact(weight: .light), trigger: transportHaptic)
         .sheet(isPresented: $showLyrics) {
             LyricsView(
@@ -99,7 +99,7 @@ struct NowPlayingScreen: View {
             return
         }
         #if canImport(MediaPlayer)
-            let ui = library.artworkUIImage(for: song.persistentID)
+            let ui = library.artworkUIImage(for: song)
             artImage = ui.map { Image(uiImage: $0) }
             if let ui {
                 artworkAspect = ui.size.width / max(ui.size.height, 1)

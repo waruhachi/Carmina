@@ -1,11 +1,13 @@
 //
 //  PlayerCoordinator.swift
-//  Carmina
+//  CarminaKit
 //
 //  Created by waru on 7/17/26.
 //
 
 import AVFoundation
+import CarminaModels
+import CarminaSources
 import SwiftUI
 
 #if canImport(UIKit)
@@ -18,26 +20,26 @@ import SwiftUI
 
 @MainActor
 @Observable
-final class PlayerCoordinator {
-    private(set) var queue: [Song] = []
-    private(set) var currentIndex = 0
+public final class PlayerCoordinator {
+    public private(set) var queue: [Song] = []
+    public private(set) var currentIndex = 0
 
     private let player = AVPlayer()
     private var endObserver: NSObjectProtocol?
 
-    @ObservationIgnored weak var library: DeviceLibrary?
+    @ObservationIgnored public weak var library: DeviceLibrary?
 
-    var isPlaying = false
-    var currentTime: Double = 0
-    var duration: Double = 0
-    var audioQuality: String?
+    public var isPlaying = false
+    public var currentTime: Double = 0
+    public var duration: Double = 0
+    public var audioQuality: String?
 
-    var current: Song? {
+    public var current: Song? {
         queue.indices.contains(currentIndex) ? queue[currentIndex] : nil
     }
-    var hasQueue: Bool { !queue.isEmpty }
+    public var hasQueue: Bool { !queue.isEmpty }
 
-    init() {
+    public init() {
         player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
             queue: .main
@@ -110,25 +112,25 @@ final class PlayerCoordinator {
         #endif
     }
 
-    func play(_ songs: [Song], startAt index: Int = 0) {
+    public func play(_ songs: [Song], startAt index: Int = 0) {
         queue = songs
         currentIndex = index
         startCurrent()
     }
 
-    func play(at index: Int) {
+    public func play(at index: Int) {
         guard queue.indices.contains(index) else { return }
         currentIndex = index
         startCurrent()
     }
 
-    func shuffle(_ songs: [Song]) {
+    public func shuffle(_ songs: [Song]) {
         queue = songs.shuffled()
         currentIndex = 0
         startCurrent()
     }
 
-    func togglePlayPause() {
+    public func togglePlayPause() {
         if isPlaying {
             player.pause()
         } else {
@@ -140,13 +142,13 @@ final class PlayerCoordinator {
         saveState()
     }
 
-    func next() {
+    public func next() {
         guard currentIndex + 1 < queue.count else { return }
         currentIndex += 1
         startCurrent(autoPlay: isPlaying)
     }
 
-    func previous() {
+    public func previous() {
         if currentTime > 3 || currentIndex == 0 {
             seek(to: 0)
             return
@@ -155,14 +157,14 @@ final class PlayerCoordinator {
         startCurrent(autoPlay: isPlaying)
     }
 
-    func seek(to seconds: Double) {
+    public func seek(to seconds: Double) {
         player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
         currentTime = seconds
         updateNowPlayingInfo()
         saveState()
     }
 
-    func playNext(_ song: Song) {
+    public func playNext(_ song: Song) {
         if queue.isEmpty {
             play([song])
         } else {
@@ -171,13 +173,52 @@ final class PlayerCoordinator {
         }
     }
 
-    func playLast(_ song: Song) {
+    public func playLast(_ song: Song) {
         if queue.isEmpty {
             play([song])
         } else {
             queue.append(song)
             saveState()
         }
+    }
+
+    public func updateSong(_ updated: Song) {
+        var changed = false
+        for i in queue.indices where queue[i].id == updated.id {
+            queue[i] = updated
+            changed = true
+        }
+        if changed {
+            updateNowPlayingInfo()
+            saveState()
+        }
+    }
+
+    public func removeFromQueue(id: UUID) {
+        guard let idx = queue.firstIndex(where: { $0.id == id }) else { return }
+        let wasCurrent = idx == currentIndex
+        queue.remove(at: idx)
+
+        if queue.isEmpty {
+            player.pause()
+            player.replaceCurrentItem(with: nil)
+            isPlaying = false
+            currentIndex = 0
+            currentTime = 0
+            duration = 0
+            audioQuality = nil
+            updateNowPlayingInfo()
+            clearState()
+            return
+        }
+        if idx < currentIndex {
+            currentIndex -= 1
+        } else if wasCurrent {
+            if currentIndex >= queue.count { currentIndex = queue.count - 1 }
+            startCurrent(autoPlay: isPlaying)
+        }
+        updateNowPlayingInfo()
+        saveState()
     }
 
     private func startCurrent(autoPlay: Bool = true) {
@@ -237,7 +278,7 @@ final class PlayerCoordinator {
         #endif
     }
 
-    func mixSettingChanged() {
+    public func mixSettingChanged() {
         if isPlaying { activateSession() }
     }
 
@@ -275,7 +316,7 @@ final class PlayerCoordinator {
         }
     }
 
-    func restoreState() {
+    public func restoreState() {
         guard queue.isEmpty,  // don't clobber an active session
             let url = stateURL,
             let data = try? Data(contentsOf: url),

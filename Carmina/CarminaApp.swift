@@ -5,33 +5,45 @@
 //  Created by waru on 7/3/26.
 //
 
+@_exported import CarminaModels
+@_exported import CarminaPlayback
+@_exported import CarminaSources
 @_exported import Inject
 import SwiftData
 import SwiftUI
 
 @main
 struct CarminaApp: App {
-    @State private var library = DeviceLibrary()
-    @State private var player = PlayerCoordinator()
+    let sharedModelContainer: ModelContainer
+    @State private var library: Library
+    @State private var player: PlayerCoordinator
 
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self
-        ])
-        let modelConfiguration = ModelConfiguration(
+    init() {
+        let schema = Schema([Track.self, MetadataOverride.self])
+        let configuration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false
         )
-
+        let container: ModelContainer
         do {
-            return try ModelContainer(
+            container = try ModelContainer(
                 for: schema,
-                configurations: [modelConfiguration]
+                configurations: [configuration]
             )
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
-    }()
+        self.sharedModelContainer = container
+
+        let device = DeviceLibrary()
+        let coordinator = PlayerCoordinator()
+        coordinator.library = device
+        let lib = Library(device: device, context: container.mainContext)
+        lib.player = coordinator
+
+        _library = State(initialValue: lib)
+        _player = State(initialValue: coordinator)
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -39,7 +51,6 @@ struct CarminaApp: App {
                 .environment(library)
                 .environment(player)
                 .task {
-                    player.library = library
                     await library.load()
                     player.restoreState()
                 }

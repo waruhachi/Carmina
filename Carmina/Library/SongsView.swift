@@ -11,7 +11,7 @@ struct SongsView: View {
     @ObserveInjection var inject
 
     @Environment(PlayerCoordinator.self) private var player
-    @Environment(DeviceLibrary.self) private var library
+    @Environment(Library.self) private var library
 
     @AppStorage("appAccent") private var accent: AppAccent = .red
     @AppStorage("songSort") private var sort: SortOption = .dateNewest

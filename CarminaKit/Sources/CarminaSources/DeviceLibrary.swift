@@ -1,10 +1,11 @@
 //
 //  DeviceLibrary.swift
-//  Carmina
+//  CarminaKit
 //
-//  Created by waru on 7/20/26.
+//  Created by waru on 7/30/26.
 //
 
+import CarminaModels
 import SwiftUI
 
 #if canImport(MediaPlayer)
@@ -13,21 +14,29 @@ import SwiftUI
 
 @MainActor
 @Observable
-final class DeviceLibrary {
-    enum LoadState { case idle, loading, authorized, denied }
+public final class DeviceLibrary: MusicSource {
+    public enum LoadState { case idle, loading, authorized, denied }
 
-    private(set) var state: LoadState = .idle
-    private(set) var songs: [Song] = []
+    public private(set) var state: LoadState = .idle
+    public private(set) var songs: [Song] = []
 
     #if canImport(MediaPlayer)
         private var artworkByID: [UInt64: MPMediaItemArtwork] = [:]
     #endif
 
-    var recentlyAdded: [Song] {
+    public init() {}
+
+    public nonisolated var sourceType: TrackSource { .device }
+
+    public nonisolated func playbackAsset(for song: Song) -> PlayableAsset? {
+        song.assetURL.map { PlayableAsset(url: $0) }
+    }
+
+    public var recentlyAdded: [Song] {
         Array(songs.sorted { $0.dateAdded > $1.dateAdded }.prefix(50))
     }
 
-    func load() async {
+    public func load() async {
         state = .loading
         #if canImport(MediaPlayer) && !targetEnvironment(simulator)
             let status = await MPMediaLibrary.requestAuthorization()
@@ -65,9 +74,9 @@ final class DeviceLibrary {
         #endif
     }
 
-    func remove(_ song: Song) { songs.removeAll { $0.id == song.id } }
+    public func remove(_ song: Song) { songs.removeAll { $0.id == song.id } }
 
-    func artworkImage(for id: UInt64?, size: CGSize) -> Image? {
+    public func artworkImage(for id: UInt64?, size: CGSize) -> Image? {
         #if canImport(MediaPlayer)
             guard let id, let art = artworkByID[id],
                 let ui = art.image(at: size)
@@ -79,7 +88,7 @@ final class DeviceLibrary {
     }
 
     #if canImport(MediaPlayer)
-        func artworkUIImage(for id: UInt64?) -> UIImage? {
+        public func artworkUIImage(for id: UInt64?) -> UIImage? {
             guard let id, let art = artworkByID[id] else { return nil }
             let natural = art.bounds.size
             guard natural.width > 0, natural.height > 0 else { return nil }
@@ -97,7 +106,7 @@ final class DeviceLibrary {
     #endif
 
     #if canImport(MediaPlayer)
-        func artwork(for id: UInt64?) -> MPMediaItemArtwork? {
+        public func artwork(for id: UInt64?) -> MPMediaItemArtwork? {
             guard let id else { return nil }
             return artworkByID[id]
         }

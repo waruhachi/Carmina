@@ -12,6 +12,7 @@ let package = Package(
                 "CarminaModels", "CarminaPlayback", "CarminaSources",
                 "SubsonicKit", "JellyfinKit", "WebDAVKit",
                 "CarminaTagging", "CarminaLyrics", "CarminaArtwork",
+                "CarminaMatch",
             ]
         )
     ],
@@ -20,7 +21,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "CarminaModels"),
-        .target(name: "CarminaPlayback", dependencies: ["CarminaModels"]),
+        .target(
+            name: "CarminaPlayback",
+            dependencies: ["CarminaModels", "CarminaSources"]
+        ),
         .target(
             name: "CarminaSources",
             dependencies: [
@@ -33,6 +37,8 @@ let package = Package(
         .target(name: "CarminaTagging", dependencies: ["ID3TagEditor"]),
         .target(name: "CarminaLyrics"),
         .target(name: "CarminaArtwork"),
+        .target(name: "CarminaMatch"),
+        .testTarget(name: "CarminaMatchTests", dependencies: ["CarminaMatch"]),
         .testTarget(
             name: "CarminaLyricsTests",
             dependencies: ["CarminaLyrics"]

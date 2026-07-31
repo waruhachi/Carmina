@@ -10,7 +10,7 @@ import SwiftUI
 struct RecentlyAddedSection: View {
     @ObserveInjection var inject
 
-    @Environment(DeviceLibrary.self) private var library
+    @Environment(Library.self) private var library
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var columns: [GridItem] {
