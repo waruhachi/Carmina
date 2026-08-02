@@ -13,6 +13,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(PlayerCoordinator.self) private var player
 
+    @AppStorage("fillArtworkSpace") private var fillArtworkSpace = false
     @AppStorage("fullscreenArtwork") private var fullscreenArtwork = false
     @AppStorage("mixWithOthers") private var mixWithOthers = false
     @AppStorage("resumeAfterInterruption") private var resumeAfterInterruption =
@@ -23,6 +24,10 @@ struct SettingsView: View {
             Form {
                 Section("Now Playing") {
                     Toggle("Full-Screen Artwork", isOn: $fullscreenArtwork)
+                    Toggle(
+                        "Fill Space for Non-Square Artwork",
+                        isOn: $fillArtworkSpace
+                    )
                 }
                 Section {
                     Toggle("Mix with Other Audio", isOn: $mixWithOthers)
