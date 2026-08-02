@@ -60,12 +60,13 @@ final class SystemAudio {
         }
 
         func setVolume(_ value: Double) {
-            volume = value
-            guard
-                let slider = volumeView.subviews
-                    .compactMap({ $0 as? UISlider }).first
-            else { return }
-            slider.value = Float(value)
+            let clamped = min(max(value, 0), 1)
+            volume = clamped
+            volumeSlider?.setValue(Float(clamped), animated: false)
+        }
+
+        private var volumeSlider: UISlider? {
+            volumeView.subviews.compactMap { $0 as? UISlider }.first
         }
 
         private func updateRoute() {

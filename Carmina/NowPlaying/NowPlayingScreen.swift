@@ -14,6 +14,7 @@ import SwiftUI
 struct NowPlayingScreen: View {
     @ObserveInjection var inject
 
+    @AppStorage("fillArtworkSpace") private var fillArtworkSpace = false
     @AppStorage("fullscreenArtwork") private var fullscreenArtwork = false
 
     @Environment(PlayerCoordinator.self) private var player
@@ -73,9 +74,10 @@ struct NowPlayingScreen: View {
         #if os(iOS)
             .overlay(alignment: .bottom) {
                 VolumeHostView(volumeView: systemAudio.volumeView)
-                .frame(width: 1, height: 1)
-                .opacity(0.00001)
+                .frame(width: 200, height: 40)
+                .opacity(0.0001)
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
         #endif
         .task(id: player.current) { await refreshArtwork() }
@@ -101,9 +103,8 @@ struct NowPlayingScreen: View {
         #if canImport(MediaPlayer)
             let ui = library.artworkUIImage(for: song)
             artImage = ui.map { Image(uiImage: $0) }
-            if let ui {
-                artworkAspect = ui.size.width / max(ui.size.height, 1)
-            }
+            artworkAspect =
+                ui.map { $0.size.width / max($0.size.height, 1) } ?? 1
             if let ui,
                 let colors = ui.dominantColorFrequencies(with: .high)?
                     .map({ Color($0.color) }),
@@ -226,41 +227,59 @@ extension NowPlayingScreen {
         GeometryReader { geo in
             let side = min(geo.size.width, geo.size.height)
             let small = !player.isPlaying
-            let nonSquare = abs(artworkAspect - 1) > 0.1
+            let pad: CGFloat = small ? 50 : 0
+            let inner = max(side - pad * 2, 0)
 
-            let playingPad: CGFloat = nonSquare ? 48 : 0
-            let pausedPad: CGFloat = nonSquare ? 90 : 50
-            let pad = small ? pausedPad : playingPad
+            artworkView(inner: inner, small: small)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .offset(y: 10)
+                .animation(
+                    reduceMotion ? nil : .smooth,
+                    value: player.isPlaying
+                )
+        }
+        .padding(.horizontal, 25)
+    }
 
-            let playingOffsetY: CGFloat = 10
-            let pausedOffsetY: CGFloat = 10
-            let offsetY = small ? pausedOffsetY : playingOffsetY
-
+    @ViewBuilder
+    private func artworkView(inner: CGFloat, small: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        let shadowColor = Color(
+            .sRGBLinear,
+            white: 0,
+            opacity: small ? 0.13 : 0.33
+        )
+        if let artImage {
+            let art = artImage.resizable().scaledToFit()
             Group {
-                if let artImage {
-                    artImage.resizable().aspectRatio(contentMode: .fill)
+                if fillArtworkSpace {
+                    // Fill the square; letterbox filled with the theme color.
+                    art
+                        .frame(width: inner, height: inner)
+                        .background(artworkBackground)
                 } else {
-                    Color.clear
+                    // No bars — art fits with its longest side = the square side.
+                    let w = artworkAspect >= 1 ? inner : inner * artworkAspect
+                    let h = artworkAspect >= 1 ? inner / artworkAspect : inner
+                    art.frame(width: w, height: h)
                 }
             }
-            .background(artworkBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .padding(pad)
+            .clipShape(shape)
             .shadow(
-                color: Color(
-                    .sRGBLinear,
-                    white: 0,
-                    opacity: small ? 0.13 : 0.33
-                ),
+                color: shadowColor,
                 radius: small ? 3 : 8,
                 y: small ? 3 : 10
             )
-            .frame(width: side, height: side)
-            .frame(width: geo.size.width, height: geo.size.height)
-            .offset(y: offsetY)
-            .animation(reduceMotion ? nil : .smooth, value: player.isPlaying)
+        } else {
+            shape
+                .fill(artworkBackground)
+                .frame(width: inner, height: inner)
+                .shadow(
+                    color: shadowColor,
+                    radius: small ? 3 : 8,
+                    y: small ? 3 : 10
+                )
         }
-        .padding(.horizontal, 25)
     }
 
     fileprivate var meshBackground: some View {
