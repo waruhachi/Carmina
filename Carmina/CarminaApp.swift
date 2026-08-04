@@ -15,6 +15,7 @@ import SwiftUI
 @main
 struct CarminaApp: App {
     let sharedModelContainer: ModelContainer
+
     @State private var library: Library
     @State private var player: PlayerCoordinator
 
@@ -51,6 +52,12 @@ struct CarminaApp: App {
                 .environment(library)
                 .environment(player)
                 .task {
+                    #if canImport(MediaPlayer)
+                        player.artworkProvider = {
+                            [weak library = library] song in
+                            library?.artworkUIImage(for: song)
+                        }
+                    #endif
                     await library.load()
                     player.restoreState()
                 }

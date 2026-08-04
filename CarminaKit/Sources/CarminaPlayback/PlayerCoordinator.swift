@@ -29,6 +29,13 @@ public final class PlayerCoordinator {
 
     @ObservationIgnored public weak var library: DeviceLibrary?
 
+    #if canImport(MediaPlayer)
+        @ObservationIgnored private var artworkSongID: UUID?
+        @ObservationIgnored private var cachedArtwork: MPMediaItemArtwork?
+        @ObservationIgnored public var artworkProvider:
+            (@MainActor (Song) -> UIImage?)?
+    #endif
+
     public var isPlaying = false
     public var currentTime: Double = 0
     public var duration: Double = 0
@@ -51,7 +58,6 @@ public final class PlayerCoordinator {
                 {
                     self.duration = d
                 }
-                self.updateNowPlayingInfo()
             }
         }
         setupRemoteCommands()
@@ -189,6 +195,9 @@ public final class PlayerCoordinator {
             changed = true
         }
         if changed {
+            #if canImport(MediaPlayer)
+                artworkSongID = nil
+            #endif
             updateNowPlayingInfo()
             saveState()
         }
@@ -437,17 +446,10 @@ public final class PlayerCoordinator {
             var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
             info[MPMediaItemPropertyTitle] = song.title
             info[MPMediaItemPropertyArtist] = song.artist
-            if !song.album.isEmpty {
-                info[MPMediaItemPropertyAlbumTitle] = song.album
-            }
+            info[MPMediaItemPropertyArtwork] = artwork(for: song)
             info[MPMediaItemPropertyPlaybackDuration] = duration
             info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
             info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
-            if let artwork = library?.artwork(for: song.persistentID) {
-                info[MPMediaItemPropertyArtwork] = artwork
-            } else {
-                info[MPMediaItemPropertyArtwork] = nil
-            }
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         #endif
     }
@@ -485,4 +487,27 @@ public final class PlayerCoordinator {
             activateSession(sampleRate: sampleRate)
         }
     }
+
+    #if canImport(MediaPlayer)
+        private func artwork(for song: Song) -> MPMediaItemArtwork? {
+            if artworkSongID == song.id { return cachedArtwork }
+            artworkSongID = song.id
+
+            if song.artworkCacheKey == nil,
+                let deviceArt = library?.artwork(for: song.persistentID)
+            {
+                cachedArtwork = deviceArt
+            } else if let image = artworkProvider?(song) {
+                let size = image.size
+                let art = UIGraphicsImageRenderer(size: size).image { _ in
+                    image.draw(in: CGRect(origin: .zero, size: size))
+                }
+                cachedArtwork = MPMediaItemArtwork(boundsSize: size) { _ in art
+                }
+            } else {
+                cachedArtwork = nil
+            }
+            return cachedArtwork
+        }
+    #endif
 }

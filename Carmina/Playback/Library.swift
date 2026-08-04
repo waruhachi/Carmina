@@ -408,7 +408,6 @@ final class Library {
         track.matchState = .matched
 
         try? context.save()
-        reloadImported()
 
         if track.artworkCacheKey == nil,
             let artURL = best.artworkURL,
@@ -418,6 +417,12 @@ final class Library {
             artworkStore.store(data, key: key)
             track.artworkCacheKey = key
             try? context.save()
+        }
+
+        reloadImported()
+
+        if let updated = songs.first(where: { $0.id == track.id }) {
+            player?.updateSong(updated)
         }
     }
 
