@@ -9,8 +9,6 @@ import SwiftUI
 internal import UniformTypeIdentifiers
 
 struct LocalView: View {
-    @ObserveInjection var inject
-
     @Environment(Library.self) private var library
     @Environment(PlayerCoordinator.self) private var player
 

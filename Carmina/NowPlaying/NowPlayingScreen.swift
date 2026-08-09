@@ -12,8 +12,6 @@ import SwiftUI
 #endif
 
 struct NowPlayingScreen: View {
-    @ObserveInjection var inject
-
     @AppStorage("fillArtworkSpace") private var fillArtworkSpace = false
     @AppStorage("fullscreenArtwork") private var fullscreenArtwork = false
 

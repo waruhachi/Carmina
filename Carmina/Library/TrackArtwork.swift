@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct TrackArtwork: View {
-    @ObserveInjection var inject
-
     @Environment(Library.self) private var library
 
     @State private var image: Image?

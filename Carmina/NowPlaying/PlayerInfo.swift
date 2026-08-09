@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct PlayerInfo: View {
-    @ObserveInjection var inject
-
     var size: CGFloat = 30
     var song: Song?
 

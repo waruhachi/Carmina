@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct LibraryView: View {
-    @ObserveInjection var inject
-
     @AppStorage("appAccent") private var accent: AppAccent = .red
 
     @State private var layout = LibraryLayout()

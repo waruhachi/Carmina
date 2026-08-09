@@ -14,8 +14,6 @@ internal import UniformTypeIdentifiers
 #endif
 
 struct EditPlaylistView: View {
-    @ObserveInjection var inject
-
     @Environment(Library.self) private var library
     @Environment(\.dismiss) private var dismiss
 

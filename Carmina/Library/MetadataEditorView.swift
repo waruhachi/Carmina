@@ -15,8 +15,6 @@ internal import UniformTypeIdentifiers
 #endif
 
 struct MetadataEditorView: View {
-    @ObserveInjection var inject
-
     @Environment(Library.self) private var library
     @Environment(\.dismiss) private var dismiss
 

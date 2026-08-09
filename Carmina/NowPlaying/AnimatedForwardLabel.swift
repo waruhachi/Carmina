@@ -9,8 +9,6 @@ import Combine
 import SwiftUI
 
 struct AnimatedForwardLabel: View {
-    @ObserveInjection var inject
-
     class PublishedWrapper: ObservableObject {
         @Published var trigger: PlayerButtonTrigger = .one(bouncing: false)
     }
@@ -51,8 +49,6 @@ struct AnimatedForwardLabel: View {
 }
 
 private struct ForwardLabel: View {
-    @ObserveInjection var inject
-
     let size: CGFloat
     var linear: Bool = false
     var progress: Double
@@ -108,8 +104,6 @@ private struct ForwardLabel: View {
 }
 
 private struct AnimationWrapper: View, Animatable {
-    @ObserveInjection var inject
-
     let size: CGFloat
     let linear: Bool
     var progress: Double

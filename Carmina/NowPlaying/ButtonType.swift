@@ -17,8 +17,6 @@ enum PlayerButtonTrigger: Equatable {
 }
 
 struct PlayerButtonLabel: View {
-    @ObserveInjection var inject
-
     let type: ButtonType
     let size: CGFloat
     var animationTrigger: PlayerButtonTrigger

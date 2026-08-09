@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct NowPlayingBackground: View {
-    @ObserveInjection var inject
-
     var colors: [Color]
 
     var body: some View {

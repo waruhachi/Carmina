@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct SidebarRootView: View {
-    @ObserveInjection var inject
-
     @Environment(PlayerCoordinator.self) private var player
 
     @Namespace private var animation

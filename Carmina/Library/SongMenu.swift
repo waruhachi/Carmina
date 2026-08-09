@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct SongMenu: View {
-    @ObserveInjection var inject
-
     @Environment(PlayerCoordinator.self) private var player
 
     let song: Song

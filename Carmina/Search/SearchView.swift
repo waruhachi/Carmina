@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct SearchView: View {
-    @ObserveInjection var inject
-
     @Environment(Library.self) private var library
     @Environment(PlayerCoordinator.self) private var player
 

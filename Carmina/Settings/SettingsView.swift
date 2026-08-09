@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @ObserveInjection var inject
-
     @Environment(\.dismiss) private var dismiss
     @Environment(PlayerCoordinator.self) private var player
 

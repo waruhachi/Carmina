@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct RootView: View {
-    @ObserveInjection var inject
-
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     @AppStorage("appAccent") private var accent: AppAccent = .red

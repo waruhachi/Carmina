@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct MarqueeText: View {
-    @ObserveInjection var inject
-
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var textSize: CGSize = .zero

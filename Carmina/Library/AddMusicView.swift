@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct AddMusicView: View {
-    @ObserveInjection var inject
-
     @Environment(Library.self) private var library
     @Environment(\.dismiss) private var dismiss
 

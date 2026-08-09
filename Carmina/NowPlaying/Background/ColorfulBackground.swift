@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct ColorfulBackground: View {
-    @ObserveInjection var inject
-
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var model = ColorfulBackgroundModel.shared

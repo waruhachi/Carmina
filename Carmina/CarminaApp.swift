@@ -8,7 +8,6 @@
 @_exported import CarminaModels
 @_exported import CarminaPlayback
 @_exported import CarminaSources
-@_exported import Inject
 import SwiftData
 import SwiftUI
 
@@ -61,7 +60,6 @@ struct CarminaApp: App {
                     await library.load()
                     player.restoreState()
                 }
-                .enableInjection()
         }
         .modelContainer(sharedModelContainer)
     }

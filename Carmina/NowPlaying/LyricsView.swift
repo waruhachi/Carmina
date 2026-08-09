@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct LyricsView: View {
-    @ObserveInjection var inject
-
     @Environment(\.dismiss) private var dismiss
 
     let title: String

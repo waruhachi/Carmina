@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct PlayerButton<Content: View>: View {
-    @ObserveInjection var inject
-
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.playerButtonConfig) var config
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

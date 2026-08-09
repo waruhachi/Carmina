@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct SettingsButton: View {
-    @ObserveInjection var inject
-
     @State private var showingSettings = false
 
     var body: some View {

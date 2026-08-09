@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct PlaylistDetailView: View {
-    @ObserveInjection var inject
-
     @Environment(PlayerCoordinator.self) private var player
     @Environment(Library.self) private var library
     @Environment(\.dismiss) private var dismiss

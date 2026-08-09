@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct MulticolorGradient: View, Animatable {
-    @ObserveInjection var inject
-
     var points: ColorPoints
     var animationUpdateHandler: ((ColorPoints) -> Void)?
 

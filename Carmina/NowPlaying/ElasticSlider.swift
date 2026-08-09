@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct ElasticSlider<LeadingContent: View, TrailingContent: View>: View {
-    @ObserveInjection var inject
-
     @Binding private var value: Double
 
     @Environment(\.elasticSliderConfig) var config

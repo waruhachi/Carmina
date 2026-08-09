@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct DownloadsView: View {
-    @ObserveInjection var inject
-
     var body: some View {
         ContentUnavailableView(
             "Downloads",

@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct RemoteView: View {
-    @ObserveInjection var inject
-
     @State private var showAddServer = false
 
     var body: some View {

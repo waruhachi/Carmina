@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct LibrarySectionPage: View {
-    @ObserveInjection var inject
-
     let section: LibrarySection
 
     var body: some View {

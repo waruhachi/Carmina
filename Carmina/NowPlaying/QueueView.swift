@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct QueueView: View {
-    @ObserveInjection var inject
-
     @Environment(PlayerCoordinator.self) private var player
     @Environment(\.dismiss) private var dismiss
 

@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct SongRow: View {
-    @ObserveInjection var inject
-
     @Environment(PlayerCoordinator.self) private var player
     @Environment(Library.self) private var library
 

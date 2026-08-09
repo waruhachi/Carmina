@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct MiniPlayerBar: View {
-    @ObserveInjection var inject
-
     @Environment(PlayerCoordinator.self) private var player
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
 

@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct LibraryRow: View {
-    @ObserveInjection var inject
-
     let section: LibrarySection
     let accent: Color
 

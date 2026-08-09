@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct RecentlyAddedSection: View {
-    @ObserveInjection var inject
-
     @Environment(Library.self) private var library
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
