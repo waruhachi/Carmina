@@ -19,6 +19,7 @@ import SwiftUI
 @Observable
 final class Library {
     @ObservationIgnored weak var player: PlayerCoordinator?
+    @ObservationIgnored private var _songLookup: [String: Song]?
 
     private let device: DeviceLibrary
     private let context: ModelContext
@@ -29,8 +30,12 @@ final class Library {
     private let artworkStore = ArtworkStore()
     private let tagWriter = TagWriter()
 
-    private(set) var imported: [Song] = []
-    private(set) var deviceSongs: [Song] = []
+    private(set) var imported: [Song] = [] {
+        didSet { _songLookup = nil }
+    }
+    private(set) var deviceSongs: [Song] = [] {
+        didSet { _songLookup = nil }
+    }
 
     private(set) var needsReviewIDs: Set<UUID> = []
     private(set) var revertableIDs: Set<UUID> = []
@@ -385,7 +390,6 @@ final class Library {
         guard let best = MatchScorer.best(candidates, for: query),
             best.confidence >= 0.75
         else {
-            let top = MatchScorer.scored(candidates, for: query).first
             track.matchAttempted = true
             try? context.save()
             return
@@ -743,30 +747,33 @@ final class Library {
         reloadPlaylists()
     }
 
-    func songs(in playlist: Playlist) -> [Song] {
-        let all = songs
-        let byPersistent = Dictionary(
-            all.compactMap { song -> (UInt64, Song)? in
-                song.persistentID.map { ($0, song) }
-            },
-            uniquingKeysWith: { first, _ in first }
-        )
-        let byTrackID = Dictionary(
-            all.map { ($0.id.uuidString, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        return playlist.itemKeys.compactMap { key in
-            let parts = key.split(separator: ":", maxSplits: 1)
-            guard parts.count == 2 else { return nil }
-            switch parts[0] {
-            case "device":
-                return UInt64(parts[1]).flatMap { byPersistent[$0] }
-            case "imported":
-                return byTrackID[String(parts[1])]
-            default:
-                return nil
-            }
+    private var songLookup: [String: Song] {
+        _ = deviceSongs
+        _ = imported
+        if let cached = _songLookup { return cached }
+        var map: [String: Song] = [:]
+        map.reserveCapacity(deviceSongs.count + imported.count)
+        for song in deviceSongs + imported {
+            let key = playlistKey(for: song)
+            if map[key] == nil { map[key] = song }
         }
+        _songLookup = map
+        return map
+    }
+
+    private func resolve(_ keys: [String], limit: Int? = nil) -> [Song] {
+        let lookup = songLookup
+        var result: [Song] = []
+        for key in keys {
+            guard let song = lookup[key] else { continue }
+            result.append(song)
+            if let limit, result.count == limit { break }
+        }
+        return result
+    }
+
+    func songs(in playlist: Playlist) -> [Song] {
+        resolve(playlist.itemKeys)
     }
 
     private func playlistKey(for song: Song) -> String {
@@ -777,7 +784,7 @@ final class Library {
     }
 
     func pruneMissing(in playlist: Playlist) {
-        let valid = Set(songs.map { playlistKey(for: $0) })
+        let valid = Set(songLookup.keys)
         var mutated = false
         if playlist.artKeys.isEmpty, !playlist.itemKeys.isEmpty {
             playlist.artKeys = playlist.itemKeys
@@ -899,35 +906,6 @@ final class Library {
     func artSongs(in playlist: Playlist) -> [Song] {
         let keys =
             playlist.artKeys.isEmpty ? playlist.itemKeys : playlist.artKeys
-        let all = songs
-        let byPersistent = Dictionary(
-            all.compactMap { song -> (UInt64, Song)? in
-                song.persistentID.map { ($0, song) }
-            },
-            uniquingKeysWith: { first, _ in first }
-        )
-        let byTrackID = Dictionary(
-            all.map { ($0.id.uuidString, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        var result: [Song] = []
-        for key in keys {
-            let parts = key.split(separator: ":", maxSplits: 1)
-            guard parts.count == 2 else { continue }
-            let song: Song?
-            switch parts[0] {
-            case "device":
-                song = UInt64(parts[1]).flatMap { byPersistent[$0] }
-            case "imported":
-                song = byTrackID[String(parts[1])]
-            default:
-                song = nil
-            }
-            if let song {
-                result.append(song)
-                if result.count == 4 { break }
-            }
-        }
-        return result
+        return resolve(keys, limit: 4)
     }
 }
