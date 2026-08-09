@@ -51,11 +51,13 @@ public final class DeviceLibrary: MusicSource {
                 guard let url = item.assetURL, !item.hasProtectedAsset else {
                     return nil
                 }
+
                 #if canImport(MediaPlayer)
                     if let art = item.artwork {
                         artworkByID[item.persistentID] = art
                     }
                 #endif
+
                 return Song(
                     title: item.title ?? "Unknown",
                     artist: item.artist ?? "Unknown Artist",
@@ -64,7 +66,8 @@ public final class DeviceLibrary: MusicSource {
                     isLocal: false,
                     persistentID: item.persistentID,
                     assetURL: url,
-                    lyrics: item.lyrics
+                    lyrics: item.lyrics,
+                    duration: item.playbackDuration
                 )
             }
             state = .authorized

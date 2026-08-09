@@ -16,6 +16,8 @@ struct LibrarySectionPage: View {
         switch section {
         case .songs:
             SongsView()
+        case .playlists:
+            PlaylistsView()
         default:
             ContentUnavailableView(
                 section.title,

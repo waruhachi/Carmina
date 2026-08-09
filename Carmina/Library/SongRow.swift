@@ -14,6 +14,7 @@ struct SongRow: View {
     @Environment(Library.self) private var library
 
     @State private var editing = false
+    @State private var addingToPlaylist = false
     #if canImport(UIKit)
         @State private var shareItem: ShareURL?
     #endif
@@ -51,7 +52,8 @@ struct SongRow: View {
                                 }
                             }
                         #endif
-                    }
+                    },
+                    onAddToPlaylist: { addingToPlaylist = true }
                 )
             } label: {
                 Image(systemName: "ellipsis")
@@ -67,13 +69,17 @@ struct SongRow: View {
             SongMenu(
                 song: song,
                 onDelete: onDelete,
-                onEditMetadata: { editing = true }
+                onEditMetadata: { editing = true },
+                onAddToPlaylist: { addingToPlaylist = true }
             )
             .environment(player)
         } preview: {
             menuPreview
                 .environment(library)
                 .environment(player)
+        }
+        .sheet(isPresented: $addingToPlaylist) {
+            AddToPlaylistView(songs: [song]).environment(library)
         }
         .sheet(isPresented: $editing) {
             MetadataEditorView(song: song).environment(library)

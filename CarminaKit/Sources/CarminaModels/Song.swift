@@ -18,6 +18,7 @@ public struct Song: Identifiable, Hashable, Codable, Sendable {
     public var assetURL: URL?
     public var lyrics: String?
     public var artworkCacheKey: String?
+    public var duration: Double?
 
     public var audioURL: URL? { assetURL }
 
@@ -31,7 +32,8 @@ public struct Song: Identifiable, Hashable, Codable, Sendable {
         persistentID: UInt64? = nil,
         assetURL: URL? = nil,
         lyrics: String? = nil,
-        artworkCacheKey: String? = nil
+        artworkCacheKey: String? = nil,
+        duration: Double? = nil
     ) {
         self.id = id
         self.title = title
@@ -43,5 +45,6 @@ public struct Song: Identifiable, Hashable, Codable, Sendable {
         self.assetURL = assetURL
         self.lyrics = lyrics
         self.artworkCacheKey = artworkCacheKey
+        self.duration = duration
     }
 }

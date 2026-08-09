@@ -35,6 +35,8 @@ final class Library {
     private(set) var needsReviewIDs: Set<UUID> = []
     private(set) var revertableIDs: Set<UUID> = []
 
+    private(set) var playlists: [Playlist] = []
+
     private struct OverrideValues {
         var title: String?
         var artist: String?
@@ -58,9 +60,11 @@ final class Library {
 
     func load() async {
         await device.load()
+
         reloadOverrides()
         rebuildDeviceSongs()
         reloadImported()
+        reloadPlaylists()
         startMatching()
     }
 
@@ -140,7 +144,8 @@ final class Library {
                     dir.appendingPathComponent($0)
                 },
                 lyrics: t.lyrics,
-                artworkCacheKey: t.artworkCacheKey
+                artworkCacheKey: t.artworkCacheKey,
+                duration: t.duration > 0 ? t.duration : nil
             )
         }
         needsReviewIDs = Set(
@@ -265,7 +270,8 @@ final class Library {
                     importedFileName: fallback,
                     artworkCacheKey: artworkKey,
                     matchState: complete ? .matched : .unmatched,
-                    matchAttempted: complete
+                    matchAttempted: complete,
+                    duration: meta.duration
                 )
             )
         }
@@ -278,13 +284,21 @@ final class Library {
     private func readEmbeddedMetadata(
         _ url: URL
     ) async -> (
-        title: String, artist: String, album: String, artworkData: Data?
+        title: String, artist: String, album: String, artworkData: Data?,
+        duration: Double
     ) {
         let asset = AVURLAsset(url: url)
+
         var title = ""
         var artist = ""
         var album = ""
         var artworkData: Data?
+        var duration: Double = 0
+
+        if let cm = try? await asset.load(.duration), cm.seconds.isFinite {
+            duration = cm.seconds
+        }
+
         if let items = try? await asset.load(.commonMetadata) {
             for item in items {
                 guard let key = item.commonKey else { continue }
@@ -304,7 +318,8 @@ final class Library {
                 }
             }
         }
-        return (title, artist, album, artworkData)
+
+        return (title, artist, album, artworkData, duration)
     }
 
     // MARK: - Auto-matching (iTunes)
@@ -351,19 +366,16 @@ final class Library {
         let term = [track.artist, track.title]
             .filter { !$0.isEmpty }
             .joined(separator: " ")
-        print("🎵 term:", term)
 
         guard
             !term.isEmpty,
             let candidates = try? await matcher.search(term: term),
             !candidates.isEmpty
         else {
-            print("🎵 no candidates / search failed")
             track.matchAttempted = true
             try? context.save()
             return
         }
-        print("🎵 candidates:", candidates.count)
 
         let query = MetadataQuery(
             title: track.title,
@@ -374,24 +386,10 @@ final class Library {
             best.confidence >= 0.75
         else {
             let top = MatchScorer.scored(candidates, for: query).first
-            print(
-                "🎵 below threshold — best:",
-                top?.title ?? "-",
-                "conf:",
-                top?.confidence ?? 0
-            )
             track.matchAttempted = true
             try? context.save()
             return
         }
-        print(
-            "🎵 matched:",
-            best.title,
-            "by",
-            best.artist,
-            "conf:",
-            best.confidence
-        )
 
         let textComplete =
             !track.title.isEmpty && !track.artist.isEmpty
@@ -647,5 +645,289 @@ final class Library {
         let name = base.isEmpty ? (track.importedFileName ?? "Track") : base
         let invalid = CharacterSet(charactersIn: "/\\:?%*|\"<>")
         return name.components(separatedBy: invalid).joined(separator: "_")
+    }
+
+    // MARK: - Playlists
+
+    private func reloadPlaylists() {
+        let descriptor = FetchDescriptor<Playlist>(
+            sortBy: [SortDescriptor(\.dateCreated, order: .reverse)]
+        )
+        playlists = (try? context.fetch(descriptor)) ?? []
+    }
+
+    @discardableResult
+    func createPlaylist(name: String) -> Playlist {
+        let playlist = Playlist(name: name)
+        context.insert(playlist)
+        try? context.save()
+        reloadPlaylists()
+        return playlist
+    }
+
+    func renamePlaylist(_ playlist: Playlist, to name: String) {
+        playlist.name = name
+        playlist.dateModified = Date()
+        try? context.save()
+        reloadPlaylists()
+    }
+
+    func deletePlaylist(_ playlist: Playlist) {
+        context.delete(playlist)
+        try? context.save()
+        reloadPlaylists()
+    }
+
+    private func seedArtKeysIfNeeded(_ playlist: Playlist) {
+        if playlist.artKeys.isEmpty, !playlist.itemKeys.isEmpty {
+            playlist.artKeys = playlist.itemKeys
+        }
+    }
+
+    func addSong(_ song: Song, to playlist: Playlist) {
+        seedArtKeysIfNeeded(playlist)
+        let key = playlistKey(for: song)
+        playlist.itemKeys.append(key)
+        playlist.artKeys.append(key)
+        playlist.dateModified = Date()
+        try? context.save()
+        reloadPlaylists()
+    }
+
+    func addSongs(_ songs: [Song], to playlist: Playlist) {
+        guard !songs.isEmpty else { return }
+        seedArtKeysIfNeeded(playlist)
+        let keys = songs.map { playlistKey(for: $0) }
+        playlist.itemKeys.append(contentsOf: keys)
+        playlist.artKeys.append(contentsOf: keys)
+        playlist.dateModified = Date()
+        try? context.save()
+        reloadPlaylists()
+    }
+
+    func removeSong(_ song: Song, from playlist: Playlist) {
+        let key = playlistKey(for: song)
+        if let idx = playlist.itemKeys.firstIndex(of: key) {
+            playlist.itemKeys.remove(at: idx)
+        }
+        if let idx = playlist.artKeys.firstIndex(of: key) {
+            playlist.artKeys.remove(at: idx)
+        }
+        playlist.dateModified = Date()
+        try? context.save()
+        reloadPlaylists()
+    }
+
+    func removeItems(at offsets: IndexSet, from playlist: Playlist) {
+        let removedKeys = offsets.map { playlist.itemKeys[$0] }
+        playlist.itemKeys.remove(atOffsets: offsets)
+        for key in removedKeys {
+            if let idx = playlist.artKeys.firstIndex(of: key) {
+                playlist.artKeys.remove(at: idx)
+            }
+        }
+        playlist.dateModified = Date()
+        try? context.save()
+        reloadPlaylists()
+    }
+
+    func moveItems(
+        in playlist: Playlist,
+        from source: IndexSet,
+        to destination: Int
+    ) {
+        seedArtKeysIfNeeded(playlist)
+        playlist.itemKeys.move(fromOffsets: source, toOffset: destination)
+        playlist.dateModified = Date()
+        try? context.save()
+        reloadPlaylists()
+    }
+
+    func songs(in playlist: Playlist) -> [Song] {
+        let all = songs
+        let byPersistent = Dictionary(
+            all.compactMap { song -> (UInt64, Song)? in
+                song.persistentID.map { ($0, song) }
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let byTrackID = Dictionary(
+            all.map { ($0.id.uuidString, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return playlist.itemKeys.compactMap { key in
+            let parts = key.split(separator: ":", maxSplits: 1)
+            guard parts.count == 2 else { return nil }
+            switch parts[0] {
+            case "device":
+                return UInt64(parts[1]).flatMap { byPersistent[$0] }
+            case "imported":
+                return byTrackID[String(parts[1])]
+            default:
+                return nil
+            }
+        }
+    }
+
+    private func playlistKey(for song: Song) -> String {
+        if !song.isLocal, let pid = song.persistentID {
+            return "device:\(pid)"
+        }
+        return "imported:\(song.id.uuidString)"
+    }
+
+    func pruneMissing(in playlist: Playlist) {
+        let valid = Set(songs.map { playlistKey(for: $0) })
+        var mutated = false
+        if playlist.artKeys.isEmpty, !playlist.itemKeys.isEmpty {
+            playlist.artKeys = playlist.itemKeys
+            mutated = true
+        }
+        let items = playlist.itemKeys.filter { valid.contains($0) }
+        if items.count != playlist.itemKeys.count {
+            playlist.itemKeys = items
+            mutated = true
+        }
+        let art = playlist.artKeys.filter { valid.contains($0) }
+        if art.count != playlist.artKeys.count {
+            playlist.artKeys = art
+            mutated = true
+        }
+        guard mutated else { return }
+        try? context.save()
+        reloadPlaylists()
+    }
+
+    func suggestedPlaylistName() -> String {
+        let base = "New Playlist"
+        let existing = Set(playlists.map(\.name))
+        if !existing.contains(base) { return base }
+        var n = 2
+        while existing.contains("\(base) \(n)") { n += 1 }
+        return "\(base) \(n)"
+    }
+
+    func setPinned(_ pinned: Bool, for playlist: Playlist) {
+        playlist.isPinned = pinned
+        try? context.save()
+        reloadPlaylists()
+    }
+
+    func markPlayed(_ playlist: Playlist) {
+        playlist.lastPlayedDate = Date()
+        try? context.save()
+        reloadPlaylists()
+    }
+
+    func updatePlaylist(
+        _ playlist: Playlist,
+        name: String,
+        details: String,
+        newArtworkData: Data?,
+        clearArtwork: Bool = false
+    ) {
+        playlist.name = name
+        playlist.details = details
+        if clearArtwork {
+            if let key = playlist.artworkCacheKey { artworkStore.remove(key) }
+            playlist.artworkCacheKey = nil
+        } else if let data = newArtworkData {
+            if let key = playlist.artworkCacheKey { artworkStore.remove(key) }
+            let key = UUID().uuidString
+            artworkStore.store(data, key: key)
+            playlist.artworkCacheKey = key
+        }
+        playlist.dateModified = Date()
+        try? context.save()
+        reloadPlaylists()
+    }
+
+    func playlistCoverImage(for playlist: Playlist) -> Image? {
+        guard let key = playlist.artworkCacheKey else { return nil }
+        return artworkStore.image(for: key)
+    }
+
+    #if canImport(MediaPlayer)
+        func playlistCoverUIImage(for playlist: Playlist) -> UIImage? {
+            if let key = playlist.artworkCacheKey,
+                let img = artworkStore.uiImage(for: key)
+            {
+                return img
+            }
+            for song in artSongs(in: playlist) {
+                if let img = artworkUIImage(for: song) { return img }
+            }
+            return nil
+        }
+    #endif
+
+    #if canImport(MediaPlayer)
+        func playlistArtUIImages(for playlist: Playlist) -> [UIImage] {
+            if let key = playlist.artworkCacheKey,
+                let img = artworkStore.uiImage(for: key)
+            {
+                return [img]
+            }
+            return artSongs(in: playlist).compactMap { artworkUIImage(for: $0) }
+        }
+    #endif
+
+    #if canImport(MediaPlayer)
+        func songArtUIImages(for playlist: Playlist) -> [UIImage] {
+            artSongs(in: playlist).compactMap { artworkUIImage(for: $0) }
+        }
+    #endif
+
+    func setPlaylistArtwork(_ data: Data, for playlist: Playlist) {
+        if let key = playlist.artworkCacheKey { artworkStore.remove(key) }
+        let key = UUID().uuidString
+        artworkStore.store(data, key: key)
+        playlist.artworkCacheKey = key
+        playlist.dateModified = Date()
+        try? context.save()
+        reloadPlaylists()
+    }
+
+    func clearPlaylistArtwork(for playlist: Playlist) {
+        if let key = playlist.artworkCacheKey { artworkStore.remove(key) }
+        playlist.artworkCacheKey = nil
+        playlist.dateModified = Date()
+        try? context.save()
+        reloadPlaylists()
+    }
+
+    func artSongs(in playlist: Playlist) -> [Song] {
+        let keys =
+            playlist.artKeys.isEmpty ? playlist.itemKeys : playlist.artKeys
+        let all = songs
+        let byPersistent = Dictionary(
+            all.compactMap { song -> (UInt64, Song)? in
+                song.persistentID.map { ($0, song) }
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let byTrackID = Dictionary(
+            all.map { ($0.id.uuidString, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        var result: [Song] = []
+        for key in keys {
+            let parts = key.split(separator: ":", maxSplits: 1)
+            guard parts.count == 2 else { continue }
+            let song: Song?
+            switch parts[0] {
+            case "device":
+                song = UInt64(parts[1]).flatMap { byPersistent[$0] }
+            case "imported":
+                song = byTrackID[String(parts[1])]
+            default:
+                song = nil
+            }
+            if let song {
+                result.append(song)
+                if result.count == 4 { break }
+            }
+        }
+        return result
     }
 }

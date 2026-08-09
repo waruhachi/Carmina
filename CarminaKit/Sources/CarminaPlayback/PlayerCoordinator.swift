@@ -188,6 +188,26 @@ public final class PlayerCoordinator {
         }
     }
 
+    public func playNext(_ songs: [Song]) {
+        guard !songs.isEmpty else { return }
+        if queue.isEmpty {
+            play(songs)
+        } else {
+            queue.insert(contentsOf: songs, at: currentIndex + 1)
+            saveState()
+        }
+    }
+
+    public func playLast(_ songs: [Song]) {
+        guard !songs.isEmpty else { return }
+        if queue.isEmpty {
+            play(songs)
+        } else {
+            queue.append(contentsOf: songs)
+            saveState()
+        }
+    }
+
     public func updateSong(_ updated: Song) {
         var changed = false
         for i in queue.indices where queue[i].id == updated.id {

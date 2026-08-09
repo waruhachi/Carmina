@@ -16,6 +16,7 @@ struct SongMenu: View {
     var onDelete: (() -> Void)? = nil
     var onEditMetadata: (() -> Void)? = nil
     var onShare: (() -> Void)? = nil
+    var onAddToPlaylist: (() -> Void)? = nil
 
     var body: some View {
         #if canImport(UIKit)
@@ -30,7 +31,9 @@ struct SongMenu: View {
             }
         #endif
         Section {
-            Button("Add to Playlist", systemImage: "text.badge.plus") {}
+            Button("Add to Playlist", systemImage: "text.badge.plus") {
+                onAddToPlaylist?()
+            }
         }
         Section {
             Button(

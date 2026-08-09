@@ -36,6 +36,8 @@ public final class Track {
     public var matchConfidence: Double?
     public var matchAttempted: Bool = false
 
+    public var duration: Double = 0
+
     public init(
         id: UUID = UUID(),
         source: TrackSource = .imported,
@@ -51,7 +53,8 @@ public final class Track {
         matchState: MatchState = .unmatched,
         matchedStoreID: String? = nil,
         matchConfidence: Double? = nil,
-        matchAttempted: Bool = false
+        matchAttempted: Bool = false,
+        duration: Double = 0
     ) {
         self.id = id
         self.sourceRaw = source.rawValue
@@ -68,6 +71,7 @@ public final class Track {
         self.matchedStoreID = matchedStoreID
         self.matchConfidence = matchConfidence
         self.matchAttempted = matchAttempted
+        self.duration = duration
     }
 
     public var source: TrackSource {

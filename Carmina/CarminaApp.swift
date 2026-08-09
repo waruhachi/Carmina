@@ -20,7 +20,7 @@ struct CarminaApp: App {
     @State private var player: PlayerCoordinator
 
     init() {
-        let schema = Schema([Track.self, MetadataOverride.self])
+        let schema = Schema([Track.self, MetadataOverride.self, Playlist.self])
         let configuration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false
