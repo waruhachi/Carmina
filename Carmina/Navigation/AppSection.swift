@@ -42,4 +42,10 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .search: SearchView()
         }
     }
+
+    static func visible(hiddenRaw: String) -> [AppSection] {
+        let hidden = Set(hiddenRaw.split(separator: ",").map(String.init))
+        let shown = allCases.filter { !hidden.contains($0.rawValue) }
+        return shown.isEmpty ? allCases : shown
+    }
 }

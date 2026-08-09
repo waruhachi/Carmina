@@ -8,18 +8,37 @@
 import SwiftUI
 
 struct SidebarRootView: View {
-    @Environment(PlayerCoordinator.self) private var player
-
     @Namespace private var animation
 
-    @State private var selection: AppSection? = .library
+    @Environment(PlayerCoordinator.self) private var player
+
+    @AppStorage("hiddenSections") private var hiddenSections = ""
+
+    @State private var selection: AppSection?
     @State private var expandNowPlaying = false
 
     private static let miniPlayerID = "nowPlaying"
 
+    init() {
+        let hidden =
+            UserDefaults.standard.string(forKey: "hiddenSections") ?? ""
+        let visible = AppSection.visible(hiddenRaw: hidden)
+        let raw =
+            UserDefaults.standard.string(forKey: "startupSection") ?? "library"
+        let startup = AppSection(rawValue: raw) ?? .library
+        _selection = State(
+            initialValue: visible.contains(startup)
+                ? startup : (visible.first ?? .library)
+        )
+    }
+
+    private var visibleSections: [AppSection] {
+        AppSection.visible(hiddenRaw: hiddenSections)
+    }
+
     var body: some View {
         NavigationSplitView {
-            List(AppSection.allCases, selection: $selection) { section in
+            List(visibleSections, selection: $selection) { section in
                 Label(section.title, systemImage: section.systemImage)
                     .tag(section)
             }
@@ -45,6 +64,11 @@ struct SidebarRootView: View {
                         )
                         .onTapGesture { expandNowPlaying = true }
                 }
+            }
+        }
+        .onChange(of: hiddenSections) {
+            if let sel = selection, !visibleSections.contains(sel) {
+                selection = visibleSections.first
             }
         }
         .fullScreenCover(isPresented: $expandNowPlaying) {

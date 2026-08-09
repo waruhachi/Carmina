@@ -16,10 +16,45 @@ struct SettingsView: View {
     @AppStorage("mixWithOthers") private var mixWithOthers = false
     @AppStorage("resumeAfterInterruption") private var resumeAfterInterruption =
         false
+    @AppStorage("startupSection") private var startupSection = "library"
+    @AppStorage("hiddenSections") private var hiddenSections = ""
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Tabs") {
+                    Picker("Start On", selection: $startupSection) {
+                        ForEach(
+                            AppSection.visible(hiddenRaw: hiddenSections)
+                        ) { section in
+                            Label(
+                                section.title,
+                                systemImage: section.systemImage
+                            )
+                            .tag(section.rawValue)
+                        }
+                    }
+                }
+
+                Section {
+                    ForEach(AppSection.allCases) { section in
+                        Toggle(isOn: visibilityBinding(section)) {
+                            Label(
+                                section.title,
+                                systemImage: section.systemImage
+                            )
+                        }
+                        .disabled(
+                            !hidden.contains(section.rawValue)
+                                && visibleCount == 1
+                        )
+                    }
+                } footer: {
+                    Text(
+                        "Hide the tabs you don't use. "
+                            + "At least one tab stays visible."
+                    )
+                }
                 Section("Now Playing") {
                     Toggle("Full-Screen Artwork", isOn: $fullscreenArtwork)
                     Toggle(
@@ -50,5 +85,33 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var hidden: Set<String> {
+        Set(hiddenSections.split(separator: ",").map(String.init))
+    }
+
+    private var visibleCount: Int {
+        AppSection.visible(hiddenRaw: hiddenSections).count
+    }
+
+    private func visibilityBinding(_ section: AppSection) -> Binding<Bool> {
+        Binding(
+            get: { !hidden.contains(section.rawValue) },
+            set: { show in
+                var set = hidden
+                if show {
+                    set.remove(section.rawValue)
+                } else {
+                    set.insert(section.rawValue)
+                }
+                hiddenSections = set.sorted().joined(separator: ",")
+                if !show, startupSection == section.rawValue {
+                    startupSection =
+                        AppSection.visible(hiddenRaw: hiddenSections)
+                        .first?.rawValue ?? "library"
+                }
+            }
+        )
     }
 }

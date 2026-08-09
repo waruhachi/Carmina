@@ -8,20 +8,41 @@
 import SwiftUI
 
 struct TabRootView: View {
-    @Environment(PlayerCoordinator.self) private var player
-
     @Namespace private var animation
 
+    @Environment(PlayerCoordinator.self) private var player
+
+    @AppStorage("hiddenSections") private var hiddenSections = ""
+
     @State private var expandNowPlaying = false
+    @State private var selection: AppSection
 
     private static let miniPlayerID = "nowPlaying"
 
+    init() {
+        let hidden =
+            UserDefaults.standard.string(forKey: "hiddenSections") ?? ""
+        let visible = AppSection.visible(hiddenRaw: hidden)
+        let raw =
+            UserDefaults.standard.string(forKey: "startupSection") ?? "library"
+        let startup = AppSection(rawValue: raw) ?? .library
+        _selection = State(
+            initialValue: visible.contains(startup)
+                ? startup : (visible.first ?? .library)
+        )
+    }
+
+    private var visibleSections: [AppSection] {
+        AppSection.visible(hiddenRaw: hiddenSections)
+    }
+
     var body: some View {
-        TabView {
-            ForEach(AppSection.allCases) { section in
+        TabView(selection: $selection) {
+            ForEach(visibleSections) { section in
                 Tab(
                     section.title,
                     systemImage: section.systemImage,
+                    value: section,
                     role: section == .search ? .search : nil
                 ) {
                     NavigationStack {
@@ -32,6 +53,11 @@ struct TabRootView: View {
                         }
                     }
                 }
+            }
+        }
+        .onChange(of: hiddenSections) {
+            if !visibleSections.contains(selection) {
+                selection = visibleSections.first ?? .library
             }
         }
         .tabBarMinimizeBehavior(player.current != nil ? .onScrollDown : .never)
