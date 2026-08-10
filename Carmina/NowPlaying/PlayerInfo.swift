@@ -9,7 +9,11 @@ import SwiftUI
 
 struct PlayerInfo: View {
     var size: CGFloat = 30
+    var previousSong: Song?
     var song: Song?
+    var nextSong: Song?
+    var textOffset: CGFloat = 0
+    @Binding var textPageWidth: CGFloat
 
     var body: some View {
         HStack(spacing: 0) {
@@ -28,15 +32,33 @@ struct PlayerInfo: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 1) {
-                MarqueeText(song?.title ?? "Not Playing")
-                    .font(.subheadline.weight(.semibold))
-                    .id(song?.title ?? "Not Playing")
-                if let artist = song?.artist, !artist.isEmpty {
-                    MarqueeText(artist)
-                        .font(.footnote)
-                        .id(artist)
-                }
+            SongTextPager(
+                previousSong: previousSong,
+                currentSong: song,
+                nextSong: nextSong,
+                offset: textOffset,
+                height: 34,
+                pageWidth: $textPageWidth
+            ) { song in
+                MiniPlayerSongText(song: song)
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+}
+
+private struct MiniPlayerSongText: View {
+    let song: Song?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            MarqueeText(song?.title ?? "Not Playing")
+                .font(.subheadline.weight(.semibold))
+                .id(song?.title ?? "Not Playing")
+            if let artist = song?.artist, !artist.isEmpty {
+                MarqueeText(artist)
+                    .font(.footnote)
+                    .id(artist)
             }
         }
     }

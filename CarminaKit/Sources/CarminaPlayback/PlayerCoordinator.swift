@@ -44,6 +44,12 @@ public final class PlayerCoordinator {
     public var current: Song? {
         queue.indices.contains(currentIndex) ? queue[currentIndex] : nil
     }
+    public var previousSong: Song? {
+        queue.indices.contains(currentIndex - 1) ? queue[currentIndex - 1] : nil
+    }
+    public var nextSong: Song? {
+        queue.indices.contains(currentIndex + 1) ? queue[currentIndex + 1] : nil
+    }
     public var hasQueue: Bool { !queue.isEmpty }
 
     public init() {
@@ -159,6 +165,12 @@ public final class PlayerCoordinator {
             seek(to: 0)
             return
         }
+
+        previousTrack()
+    }
+
+    public func previousTrack() {
+        guard currentIndex > 0 else { return }
         currentIndex -= 1
         startCurrent(autoPlay: isPlaying)
     }

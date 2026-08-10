@@ -17,10 +17,13 @@ struct NowPlayingScreen: View {
 
     @Environment(PlayerCoordinator.self) private var player
     @Environment(Library.self) private var library
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
 
     @State private var transportHaptic = 0
+    @State private var songTextOffset: CGFloat = 0
+    @State private var songTextPageWidth: CGFloat = 0
     @State private var systemAudio = SystemAudio()
     @State private var artImage: Image?
     @State private var artworkAspect: CGFloat = 1
@@ -147,6 +150,17 @@ extension NowPlayingScreen {
     fileprivate var grip: some View {
         Capsule().fill(.white.opacity(0.5)).frame(width: 60, height: 4)
             .padding(.top, 8)
+            .frame(maxWidth: .infinity)
+            .contentShape(.rect)
+            .songSwipeGesture(
+                offset: $songTextOffset,
+                canPrevious: player.previousSong != nil,
+                canNext: player.nextSong != nil,
+                pageWidth: songTextPageWidth,
+                onPrevious: swipeToPrevious,
+                onNext: swipeToNext,
+                onSwipeDown: dismissNowPlaying
+            )
     }
 }
 
@@ -212,6 +226,16 @@ extension NowPlayingScreen {
                     endPoint: .bottom
                 )
             )
+            .contentShape(.rect)
+            .songSwipeGesture(
+                offset: $songTextOffset,
+                canPrevious: player.previousSong != nil,
+                canNext: player.nextSong != nil,
+                pageWidth: songTextPageWidth,
+                onPrevious: swipeToPrevious,
+                onNext: swipeToNext,
+                onSwipeDown: dismissNowPlaying
+            )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .ignoresSafeArea()
@@ -230,6 +254,16 @@ extension NowPlayingScreen {
 
             artworkView(inner: inner, small: small)
                 .frame(width: geo.size.width, height: geo.size.height)
+                .contentShape(.rect)
+                .songSwipeGesture(
+                    offset: $songTextOffset,
+                    canPrevious: player.previousSong != nil,
+                    canNext: player.nextSong != nil,
+                    pageWidth: songTextPageWidth,
+                    onPrevious: swipeToPrevious,
+                    onNext: swipeToNext,
+                    onSwipeDown: dismissNowPlaying
+                )
                 .offset(y: 10)
                 .animation(
                     reduceMotion ? nil : .smooth,
@@ -310,16 +344,18 @@ extension NowPlayingScreen {
 extension NowPlayingScreen {
     fileprivate var titleRow: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                MarqueeText(player.current?.title ?? "")
-                    .font(.title3.weight(.semibold))
-                    .id(player.current?.title ?? "")
-                MarqueeText(player.current?.artist ?? "")
-                    .font(.title3)
-                    .foregroundStyle(.white.opacity(0.7))
-                    .id(player.current?.artist ?? "")
+            SongTextPager(
+                previousSong: player.previousSong,
+                currentSong: player.current,
+                nextSong: player.nextSong,
+                offset: songTextOffset,
+                height: 50,
+                pageWidth: $songTextPageWidth
+            ) { song in
+                NowPlayingSongText(song: song)
             }
-            Spacer(minLength: 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
             if let song = player.current {
                 Menu {
                     SongMenu(song: song)
@@ -334,6 +370,32 @@ extension NowPlayingScreen {
                 .accessibilityLabel("More")
             }
         }
+        .contentShape(.rect)
+        .songSwipeGesture(
+            offset: $songTextOffset,
+            canPrevious: player.previousSong != nil,
+            canNext: player.nextSong != nil,
+            pageWidth: songTextPageWidth,
+            onPrevious: swipeToPrevious,
+            onNext: swipeToNext,
+            onSwipeDown: dismissNowPlaying
+        )
+    }
+
+    private func dismissNowPlaying() {
+        dismiss()
+    }
+
+    private func swipeToPrevious() {
+        backwardTrigger.toggle(bouncing: true)
+        transportHaptic += 1
+        player.previousTrack()
+    }
+
+    private func swipeToNext() {
+        forwardTrigger.toggle(bouncing: true)
+        transportHaptic += 1
+        player.next()
     }
 
     fileprivate var scrubber: some View {
@@ -535,5 +597,21 @@ extension NowPlayingScreen {
         .foregroundStyle(.white.opacity(0.7))
         .padding(.horizontal, 80)
         .padding(.top, 5)
+    }
+}
+
+private struct NowPlayingSongText: View {
+    let song: Song?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            MarqueeText(song?.title ?? "")
+                .font(.title3.weight(.semibold))
+                .id(song?.title ?? "")
+            MarqueeText(song?.artist ?? "")
+                .font(.title3)
+                .foregroundStyle(.white.opacity(0.7))
+                .id(song?.artist ?? "")
+        }
     }
 }

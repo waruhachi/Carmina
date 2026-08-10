@@ -12,6 +12,8 @@ struct MiniPlayerBar: View {
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
 
     @State private var transportHaptic = 0
+    @State private var songTextOffset: CGFloat = 0
+    @State private var songTextPageWidth: CGFloat = 0
     @State private var forwardTrigger: PlayerButtonTrigger = .one(
         bouncing: false
     )
@@ -22,10 +24,17 @@ struct MiniPlayerBar: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            PlayerInfo(size: 30, song: player.current)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(.rect)
-                .onTapGesture { onExpand() }
+            PlayerInfo(
+                size: 30,
+                previousSong: player.previousSong,
+                song: player.current,
+                nextSong: player.nextSong,
+                textOffset: songTextOffset,
+                textPageWidth: $songTextPageWidth
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect)
+            .onTapGesture { onExpand() }
 
             HStack(spacing: 0) {
                 Button {
@@ -60,7 +69,25 @@ struct MiniPlayerBar: View {
         }
         .foregroundStyle(.primary)
         .padding(.horizontal, 15)
+        .songSwipeGesture(
+            offset: $songTextOffset,
+            canPrevious: player.previousSong != nil,
+            canNext: player.nextSong != nil,
+            pageWidth: songTextPageWidth,
+            onPrevious: swipeToPrevious,
+            onNext: swipeToNext
+        )
         .sensoryFeedback(.impact(weight: .light), trigger: transportHaptic)
+    }
+
+    private func swipeToPrevious() {
+        transportHaptic += 1
+        player.previousTrack()
+    }
+
+    private func swipeToNext() {
+        transportHaptic += 1
+        player.next()
     }
 }
 
