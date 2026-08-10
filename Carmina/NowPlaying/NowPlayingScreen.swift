@@ -496,11 +496,18 @@ extension NowPlayingScreen {
 
             VStack(spacing: 16) {
                 #if os(iOS)
-                    RoutePickerView()
+                    RoutePickerView(symbolName: systemAudio.routePickerSymbol)
                         .frame(width: 44, height: 44)
-                        .scaleEffect(1.35)
+                        .contentShape(.rect)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel("Audio Output")
+                        .accessibilityValue(
+                            systemAudio.routeName.isEmpty
+                                ? "This Device"
+                                : systemAudio.routeName
+                        )
                 #else
-                    Image(systemName: "airplay.audio")
+                    Image(systemName: systemAudio.routeSymbol)
                 #endif
                 if !systemAudio.routeName.isEmpty {
                     Text(systemAudio.routeName)
