@@ -494,26 +494,30 @@ extension NowPlayingScreen {
 
             Spacer()
 
-            VStack(spacing: 16) {
-                #if os(iOS)
-                    RoutePickerView(symbolName: systemAudio.routePickerSymbol)
-                        .frame(width: 44, height: 44)
-                        .contentShape(.rect)
-                        .accessibilityElement(children: .contain)
-                        .accessibilityLabel("Audio Output")
-                        .accessibilityValue(
-                            systemAudio.routeName.isEmpty
-                                ? "This Device"
-                                : systemAudio.routeName
-                        )
-                #else
-                    Image(systemName: systemAudio.routeSymbol)
-                #endif
-                if !systemAudio.routeName.isEmpty {
-                    Text(systemAudio.routeName)
-                        .font(.caption2.weight(.semibold))
-                }
-            }
+            #if os(iOS)
+                RoutePickerView(symbolName: systemAudio.routePickerSymbol)
+                    .frame(width: 44, height: 44)
+                    .contentShape(.rect)
+                    .overlay(alignment: .top) {
+                        Text(systemAudio.routeName)
+                            .font(.caption2.weight(.semibold))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .offset(y: 48)
+                            .opacity(systemAudio.routeName.isEmpty ? 0 : 1)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Audio Output")
+                    .accessibilityValue(
+                        systemAudio.routeName.isEmpty
+                            ? "This Device"
+                            : systemAudio.routeName
+                    )
+            #else
+                Image(systemName: systemAudio.routeSymbol)
+            #endif
 
             Spacer()
 
