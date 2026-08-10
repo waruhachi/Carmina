@@ -1,3 +1,10 @@
+//
+//  PrivateBluetoothAdapter.h
+//  Carmina
+//
+//  Created by waru on 8/10/26.
+//
+
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN

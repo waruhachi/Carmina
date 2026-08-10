@@ -1,3 +1,10 @@
+//
+//  PrivateBluetoothAdapter.m
+//  Carmina
+//
+//  Created by waru on 8/10/26.
+//
+
 #import "PrivateBluetoothAdapter.h"
 
 #import <TargetConditionals.h>
